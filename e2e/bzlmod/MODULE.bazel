@@ -1,0 +1,7 @@
+module(
+    name = "rules_omniverse_bcr_test",
+    version = "0.0.0",
+    bazel_compatibility = [">=8.0.0"],
+)
+
+bazel_dep(name = "rules_omniverse", version = "0.1.0")

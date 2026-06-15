@@ -1,0 +1,47 @@
+load("@rules_omniverse//omniverse:defs.bzl", "omni_app_bundle", "omni_asset_bundle", "omni_extension", "omni_kit_app", "omni_manifest_test", "omni_repo_publish_config")
+
+package(default_visibility = ["//visibility:public"])
+
+omni_asset_bundle(
+    name = "assets",
+    srcs = ["assets/sample.usda"],
+    bundle_name = "nativelink_bcr_assets",
+)
+
+omni_extension(
+    name = "extension",
+    srcs = glob(["extension/**"]),
+    extension_name = "com.nativelink.bcr.viewer",
+    manifest = "extension/config/extension.toml",
+)
+
+omni_kit_app(
+    name = "app",
+    extensions = [":extension"],
+    settings = """
+app.window.title = "Nativelink BCR Viewer"
+""",
+    title = "Nativelink BCR Viewer",
+    version = "0.1.0",
+)
+
+omni_app_bundle(
+    name = "bundle",
+    app = ":app",
+    assets = [":assets"],
+    bundle_name = "nativelink_bcr_viewer",
+    extensions = [":extension"],
+)
+
+omni_repo_publish_config(
+    name = "publish_config",
+    extensions = [":extension"],
+)
+
+omni_manifest_test(
+    name = "extension_metadata_test",
+    expected_name = "com.nativelink.bcr.viewer",
+    kind = "extension",
+    target = ":extension",
+    version = "0.1.0",
+)

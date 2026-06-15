@@ -1,0 +1,13 @@
+[package]
+title = "Nativelink BCR Viewer"
+description = "Bzlmod consumer test extension for rules_omniverse."
+version = "0.1.0"
+category = "Testing"
+keywords = ["nativelink", "bcr", "omniverse"]
+
+[dependencies]
+"omni.kit.uiapp" = {}
+
+[[python.module]]
+name = "com.nativelink.bcr.viewer"
+

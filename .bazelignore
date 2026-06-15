@@ -2,4 +2,7 @@ bazel-bin
 bazel-out
 bazel-rules_omniverse
 bazel-testlogs
-
+e2e/bzlmod/bazel-bin
+e2e/bzlmod/bazel-bzlmod
+e2e/bzlmod/bazel-out
+e2e/bzlmod/bazel-testlogs
