@@ -31,7 +31,7 @@ register_toolchains("@local_kit//:toolchain")
 
 Users get Bazel-native dependency tracking, cached packaging, repeatable outputs,
 CI-friendly tests, and a clean path to remote execution with systems like
-Nativelink. For example, a Nativelink Omniverse extension can declare its UI
+Nativelink or BuildFarm. For example, a Nativelink Omniverse extension can declare its UI
 code, assets, and Kit app wrapper once, then Bazel can build the extension
 package, app bundle, metadata tests, and publish config consistently on every
 machine.
