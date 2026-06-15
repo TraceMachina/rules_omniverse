@@ -1,0 +1,4 @@
+/bazel-*
+/.cache/
+/.DS_Store
+

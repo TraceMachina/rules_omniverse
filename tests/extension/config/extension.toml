@@ -1,0 +1,13 @@
+[package]
+title = "Nativelink Test Viewer"
+description = "Test extension for rules_omniverse."
+version = "0.1.0"
+category = "Testing"
+keywords = ["nativelink", "test"]
+
+[dependencies]
+"omni.kit.uiapp" = {}
+
+[[python.module]]
+name = "com.nativelink.test.viewer"
+

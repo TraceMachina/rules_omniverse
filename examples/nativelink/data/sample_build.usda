@@ -1,0 +1,10 @@
+#usda 1.0
+(
+    defaultPrim = "Build"
+)
+
+def Xform "Build"
+{
+    custom string status = "complete"
+}
+

@@ -1,0 +1,13 @@
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "asset.bzl",
+    "bundle.bzl",
+    "common.bzl",
+    "extension.bzl",
+    "kit_app.bzl",
+    "repo_publish.bzl",
+    "repositories.bzl",
+    "testing.bzl",
+])
+
