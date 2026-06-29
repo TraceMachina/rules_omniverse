@@ -1,4 +1,6 @@
 /bazel-*
 e2e/bzlmod/bazel-*
+MODULE.bazel.lock
+e2e/bzlmod/MODULE.bazel.lock
 /.cache/
 /.DS_Store

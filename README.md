@@ -6,6 +6,9 @@ extension publishing workflows.
 The ruleset is designed for repositories that want Bazel to own the reproducible
 parts of an Omniverse delivery pipeline while still allowing NVIDIA Kit and
 registry tools to remain externally supplied SDK tools.
+Internal packaging and metadata validation tools are Python executables built
+through `rules_python`; Kit and `repo` still come from the configured Omniverse
+SDK installation.
 
 ## Install
 

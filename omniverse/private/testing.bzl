@@ -15,7 +15,8 @@ def _metadata_from_target(target):
 def _omni_manifest_test_impl(ctx):
     metadata = _metadata_from_target(ctx.attr.target)
     script = ctx.actions.declare_file(ctx.label.name + "_test.sh")
-    checker = ctx.executable._checker
+    checker_info = ctx.attr._checker[DefaultInfo]
+    checker = checker_info.files_to_run.executable
     checker_path = workspace_runfiles_path(ctx, checker)
     metadata_path = workspace_runfiles_path(ctx, metadata)
     args = []
@@ -40,10 +41,12 @@ exec "$RUNFILES/{checker}" --metadata "$RUNFILES/{metadata}" {args}
         metadata = metadata_path,
     )
     ctx.actions.write(script, content, is_executable = True)
+    runfiles = ctx.runfiles(files = [checker, metadata])
+    runfiles = runfiles.merge(checker_info.default_runfiles)
     return [
         DefaultInfo(
             executable = script,
-            runfiles = ctx.runfiles(files = [checker, metadata]),
+            runfiles = runfiles,
         ),
     ]
 
@@ -56,8 +59,7 @@ omni_manifest_test = rule(
         "target": attr.label(mandatory = True, doc = "Target with Omniverse metadata."),
         "version": attr.string(doc = "Expected version, when present."),
         "_checker": attr.label(
-            default = Label("//tools:assert_manifest.py"),
-            allow_single_file = True,
+            default = Label("//tools:assert_manifest"),
             executable = True,
             cfg = "exec",
         ),
