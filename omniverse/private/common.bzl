@@ -27,8 +27,7 @@ def package_relative_path(ctx, file, strip_prefix = ""):
 def package_tool_attrs():
     return {
         "_packager": attr.label(
-            default = Label("//tools:package_omniverse.py"),
-            allow_single_file = True,
+            default = Label("//tools:package_omniverse"),
             executable = True,
             cfg = "exec",
         ),
@@ -50,6 +49,7 @@ def write_package_spec(ctx, *, name, kind, files = [], dirs = [], metadata = {},
     return spec
 
 def run_package_tool(ctx, *, spec, root, archive, metadata, inputs, mnemonic, progress):
+    packager = ctx.attr._packager[DefaultInfo].files_to_run
     args = ctx.actions.args()
     args.add("--spec", spec)
     args.add("--root-out", root.path)
@@ -57,10 +57,11 @@ def run_package_tool(ctx, *, spec, root, archive, metadata, inputs, mnemonic, pr
     args.add("--metadata-out", metadata.path)
 
     ctx.actions.run(
-        executable = ctx.executable._packager,
+        executable = packager,
         arguments = [args],
         inputs = depset(inputs + [spec]),
         outputs = [root, archive, metadata],
+        tools = [packager],
         mnemonic = mnemonic,
         progress_message = progress,
     )
