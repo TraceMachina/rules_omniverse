@@ -13,10 +13,20 @@ SDK installation.
 ## Install
 
 ```starlark
-bazel_dep(name = "rules_omniverse", version = "0.1.0")
+bazel_dep(name = "rules_omniverse", version = "0.2.0")
 ```
 
-If Kit is installed outside Bazel, register it with the module extension:
+## Kit requirement
+
+`rules_omniverse` does not download or bundle NVIDIA Omniverse Kit. Bazel can
+generate `.kit` files, validate metadata, and build extension, asset, and app
+bundles without Kit installed. Running an `omni_kit_app`, running integration
+tests inside Kit, or publishing with Kit's `repo` tool requires an external Kit
+installation.
+
+Register an installed Kit SDK with the module extension so `bazel run` targets
+use it automatically. `path` is the Kit installation root, while
+`kit_executable` and `repo_executable` are paths relative to that root:
 
 ```starlark
 kit = use_extension("@rules_omniverse//omniverse:extensions.bzl", "kit")
@@ -29,6 +39,18 @@ kit.local(
 use_repo(kit, "local_kit")
 register_toolchains("@local_kit//:toolchain")
 ```
+
+Alternatively, set `OMNI_KIT` to the Kit executable for a one-off invocation,
+or put `kit` on `PATH`:
+
+```bash
+OMNI_KIT=/opt/nvidia/omniverse/kit/kit \
+  bazel run //examples/nativelink:nativelink_build_viewer
+```
+
+If no registered toolchain, `OMNI_KIT`, or `kit` command is available, the app
+launcher exits with configuration instructions. It cannot run the Omniverse
+application without Kit.
 
 ## Why this is useful
 
@@ -83,8 +105,11 @@ app.exts.folders."++" = ["${app}/../exts"]
 Run the app with:
 
 ```bash
-OMNI_KIT=/path/to/kit bazel run //examples/nativelink:nativelink_build_viewer
+bazel run //examples/nativelink:nativelink_build_viewer
 ```
+
+That command uses the registered Kit toolchain shown above. Without module
+registration, set `OMNI_KIT=/absolute/path/to/kit` or add `kit` to `PATH`.
 
 Build a portable bundle:
 
