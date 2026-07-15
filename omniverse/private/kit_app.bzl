@@ -3,6 +3,8 @@
 load("//omniverse:providers.bzl", "OmniExtensionInfo", "OmniKitAppInfo")
 load("//omniverse/private:common.bzl", "workspace_runfiles_path")
 
+_KIT_TOOLCHAIN_TYPE = "//omniverse:toolchain_type"
+
 def _toml_quote(value):
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
@@ -54,6 +56,12 @@ def _omni_kit_app_impl(ctx):
     )
 
     app_runfile = workspace_runfiles_path(ctx, app_file)
+    target_label = "//%s:%s" % (ctx.label.package, ctx.label.name)
+    kit_toolchain = ctx.toolchains[_KIT_TOOLCHAIN_TYPE]
+    kit_file = kit_toolchain.omniverse.kit if kit_toolchain else None
+    toolchain_kit = ""
+    if kit_file:
+        toolchain_kit = "$RUNFILES/%s" % workspace_runfiles_path(ctx, kit_file)
     script = """#!/usr/bin/env bash
 set -euo pipefail
 if [[ -n "${{RUNFILES_DIR:-}}" ]]; then
@@ -61,12 +69,49 @@ if [[ -n "${{RUNFILES_DIR:-}}" ]]; then
 else
   RUNFILES="$0.runfiles"
 fi
-KIT="${{OMNI_KIT:-kit}}"
+TOOLCHAIN_KIT="{toolchain_kit}"
+if [[ -n "${{OMNI_KIT:-}}" ]]; then
+  KIT="$OMNI_KIT"
+elif [[ -n "$TOOLCHAIN_KIT" ]]; then
+  KIT="$TOOLCHAIN_KIT"
+elif command -v kit >/dev/null 2>&1; then
+  KIT="$(command -v kit)"
+else
+  cat >&2 <<'EOF'
+rules_omniverse: NVIDIA Omniverse Kit is required to run {target}.
+
+Kit is an external NVIDIA SDK and is not downloaded by rules_omniverse.
+Install Kit, then use one of these options:
+  1. Register the local Kit install with the rules_omniverse module extension.
+  2. Set OMNI_KIT=/absolute/path/to/kit for this invocation.
+  3. Add the Kit executable to PATH.
+
+Generating .kit files, bundles, and metadata does not require Kit; launching an
+omni_kit_app does. See the rules_omniverse README for configuration examples.
+EOF
+  exit 127
+fi
+if [[ "$KIT" == */* ]]; then
+  if [[ ! -x "$KIT" ]]; then
+    echo "rules_omniverse: Kit executable is missing or not executable: $KIT" >&2
+    exit 126
+  fi
+elif ! command -v "$KIT" >/dev/null 2>&1; then
+  echo "rules_omniverse: Kit command was not found on PATH: $KIT" >&2
+  exit 127
+fi
 exec "$KIT" "$RUNFILES/{app}" "$@"
-""".format(app = app_runfile)
+""".format(
+        app = app_runfile,
+        target = target_label,
+        toolchain_kit = toolchain_kit,
+    )
     ctx.actions.write(launcher, script, is_executable = True)
 
-    runfiles = ctx.runfiles(files = [app_file, metadata] + [ext.root for ext in extension_infos])
+    runfiles_files = [app_file, metadata] + [ext.root for ext in extension_infos]
+    if kit_file:
+        runfiles_files.append(kit_file)
+    runfiles = ctx.runfiles(files = runfiles_files)
     return [
         DefaultInfo(
             executable = launcher,
@@ -108,4 +153,7 @@ omni_kit_app = rule(
         ),
     },
     doc = "Generates a Kit .kit application config and bazel run launcher.",
+    toolchains = [
+        config_common.toolchain_type(_KIT_TOOLCHAIN_TYPE, mandatory = False),
+    ],
 )
