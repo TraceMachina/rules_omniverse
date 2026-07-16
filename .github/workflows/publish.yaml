@@ -3,26 +3,41 @@ name: Publish to BCR
 on:
   workflow_call:
     inputs:
+      release_artifacts_run_id:
+        description: "Release workflow run containing the attested archive"
+        required: false
+        type: string
       tag_name:
         required: true
         type: string
+    secrets:
+      BCR_PUBLISH_TOKEN:
+        required: true
   workflow_dispatch:
     inputs:
+      release_artifacts_run_id:
+        description: "Original Release workflow run ID; recommended for manual retries"
+        required: false
+        type: string
       tag_name:
-        description: "Release tag to publish, for example v0.1.0"
+        description: "Release tag to publish, for example v0.3.0"
         required: true
         type: string
 
 jobs:
   publish:
-    uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@v1.2.0
+    # BCR provenance verification recognizes this community trusted builder by
+    # its semantic version ref; do not replace the ref with a commit SHA.
+    uses: bazel-contrib/publish-to-bcr/.github/workflows/publish.yaml@v1.4.2
     with:
+      attest: true
+      draft: true
+      release_artifacts_run_id: ${{ inputs.release_artifacts_run_id || github.run_id }}
       tag_name: ${{ inputs.tag_name }}
       registry_fork: TraceMachina/bazel-central-registry
-      attest: false
-      draft: true
     permissions:
+      attestations: write
       contents: write
+      id-token: write
     secrets:
       publish_token: ${{ secrets.BCR_PUBLISH_TOKEN }}
-

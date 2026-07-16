@@ -4,3 +4,7 @@ MODULE.bazel.lock
 e2e/bzlmod/MODULE.bazel.lock
 /.cache/
 /.DS_Store
+/.env
+/*.private.bazelrc
+__pycache__/
+*.pyc

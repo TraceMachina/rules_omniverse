@@ -1,4 +1,6 @@
-load("@rules_omniverse//omniverse:defs.bzl", "omni_app_bundle", "omni_asset_bundle", "omni_extension", "omni_kit_app", "omni_manifest_test", "omni_repo_publish_config")
+load("@rules_omniverse//omniverse:defs.bzl", "omni_app_bundle", "omni_asset_bundle", "omni_container_gpu_action", "omni_extension", "omni_gpu_action", "omni_gpu_platform", "omni_kit_app", "omni_manifest_test", "omni_repo_publish_config", "omni_usd_convert", "omni_usd_optimize", "omni_usd_profile", "omni_usd_validate", "omni_worker_script")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -44,4 +46,141 @@ omni_manifest_test(
     kind = "extension",
     target = ":extension",
     version = "0.1.0",
+)
+
+# Hermetic Bzlmod fixture only; real GPU validation uses the documented
+# H200-series NativeLink test bench.
+omni_worker_script(
+    name = "fake_gpu_adapter",
+    src = "fake_gpu_adapter.sh",
+)
+
+omni_usd_validate(
+    name = "stage_validation",
+    src = "assets/sample.usda",
+    gpu = True,
+    gpu_model = "E2E_GPU",
+    tool = ":fake_gpu_adapter",
+)
+
+omni_usd_profile(
+    name = "stage_profile",
+    src = "assets/sample.usda",
+    tool = ":fake_gpu_adapter",
+)
+
+omni_usd_convert(
+    name = "stage_conversion",
+    src = "assets/sample.usda",
+    tool = ":fake_gpu_adapter",
+)
+
+omni_usd_optimize(
+    name = "stage_optimization",
+    src = ":stage_conversion",
+    tool = ":fake_gpu_adapter",
+)
+
+sh_test(
+    name = "stage_validation_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :stage_validation)",
+        "valid",
+        "true",
+    ],
+    data = [":stage_validation"],
+)
+
+sh_test(
+    name = "stage_profile_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :stage_profile)",
+        "profile",
+        "prim_count",
+    ],
+    data = [":stage_profile"],
+)
+
+sh_test(
+    name = "stage_conversion_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :stage_conversion)",
+        "fake convert adapter",
+    ],
+    data = [":stage_conversion"],
+)
+
+sh_test(
+    name = "stage_optimization_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :stage_optimization)",
+        "fake optimize adapter",
+    ],
+    data = [":stage_optimization"],
+)
+
+omni_gpu_platform(
+    name = "fake_gpu_platform",
+    constraint_values = ["@rules_omniverse//omniverse/constraints:oci_container_runtime"],
+    gpu_model = "E2E_GPU",
+    parents = ["@platforms//host"],
+)
+
+omni_gpu_action(
+    name = "gpu_result",
+    srcs = ["assets/sample.usda"],
+    outs = ["gpu_result.json"],
+    arguments = [
+        "--input",
+        "{input}",
+        "--output",
+        "{output}",
+    ],
+    gpu_model = "E2E_GPU",
+    tool = ":fake_gpu_adapter",
+)
+
+sh_test(
+    name = "gpu_result_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :gpu_result)",
+        "gpu",
+        "true",
+    ],
+    data = [":gpu_result"],
+)
+
+sh_binary(
+    name = "fake_container_runner",
+    srcs = ["fake_container_runner.sh"],
+)
+
+omni_container_gpu_action(
+    name = "container_gpu_result",
+    srcs = ["fake_gpu_adapter.sh"],
+    outs = ["container_gpu_result.json"],
+    arguments = [
+        "{execroot}/{input:fake_gpu_adapter.sh}",
+        "--output",
+        "{output}",
+    ],
+    gpu_model = "E2E_GPU",
+    image = "registry.example/omniverse:test",
+    runner = ":fake_container_runner",
+)
+
+sh_test(
+    name = "container_gpu_result_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :container_gpu_result)",
+        "gpu",
+        "true",
+    ],
+    data = [":container_gpu_result"],
 )

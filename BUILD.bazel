@@ -3,7 +3,9 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "metadata",
     srcs = [
+        "CHANGELOG.md",
         "LICENSE",
         "README.md",
+        "RELEASING.md",
     ],
 )

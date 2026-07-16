@@ -107,7 +107,7 @@ _attrs = {
     ),
     "extension_name": attr.string(
         mandatory = True,
-        doc = "Omniverse extension name, for example com.nativelink.build.viewer.",
+        doc = "Omniverse extension name, for example com.example.asset.viewer.",
     ),
     "manifest": attr.label(
         allow_single_file = True,

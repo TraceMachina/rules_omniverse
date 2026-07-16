@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+constraint_setting(
+    name = "accelerator",
+)
+
+constraint_value(
+    name = "nvidia_gpu",
+    constraint_setting = ":accelerator",
+)
+
+constraint_setting(
+    name = "runtime_environment",
+)
+
+constraint_value(
+    name = "oci_container_runtime",
+    constraint_setting = ":runtime_environment",
+)
