@@ -52,3 +52,22 @@ OmniKitToolchainInfo = provider(
         "repo": "Kit repo executable file, if available.",
     },
 )
+
+OmniUsdInfo = provider(
+    doc = "An OpenUSD stage and metadata produced by a rules_omniverse action.",
+    fields = {
+        "operation": "Operation that produced the stage or report.",
+        "report": "Optional machine-readable report file.",
+        "source": "Original input OpenUSD stage.",
+        "stage": "Current OpenUSD stage after the operation.",
+    },
+)
+
+OmniGpuActionInfo = provider(
+    doc = "Outputs produced by an action selected for a GPU execution platform.",
+    fields = {
+        "container_image": "Image reference used by a container action, or an empty string for a host tool action.",
+        "outputs": "Depset of files produced by the GPU action.",
+        "tree_outputs": "Depset of declared directory artifacts produced by the GPU action.",
+    },
+)

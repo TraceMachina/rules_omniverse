@@ -1,0 +1,15 @@
+# Replace H200_HOST with an authenticated endpoint or 127.0.0.1 when using a
+# private local port forward. Do not expose NativeLink's plaintext gRPC listener.
+build:h200 --remote_cache=grpc://H200_HOST:50051
+build:h200 --remote_executor=grpc://H200_HOST:50051
+build:h200 --remote_local_fallback=false
+build:h200 --remote_timeout=600
+build:h200 --remote_download_minimal
+build:h200 --jobs=64
+build:h200 --extra_execution_platforms=//examples/nativelink/gpu:h200_linux_x86_64
+
+# Adds a container-capable H200 platform without prescribing an image or tag.
+build:h200-container --config=h200
+build:h200-container --extra_execution_platforms=//examples/nativelink/gpu:h200_container_linux_x86_64
+
+test:h200 --test_output=errors

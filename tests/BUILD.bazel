@@ -1,4 +1,6 @@
-load("//omniverse:defs.bzl", "omni_app_bundle", "omni_asset_bundle", "omni_extension", "omni_extension_test", "omni_kit_app", "omni_kit_toolchain", "omni_manifest_test", "omni_repo_publish_config")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//omniverse:defs.bzl", "omni_app_bundle", "omni_asset_bundle", "omni_container_gpu_action", "omni_extension", "omni_extension_test", "omni_gpu_action", "omni_gpu_platform", "omni_kit_app", "omni_kit_toolchain", "omni_manifest_test", "omni_repo_publish_config", "omni_usd_convert", "omni_usd_optimize", "omni_usd_profile", "omni_usd_validate", "omni_worker_script")
+load(":provider_probe.bzl", "omni_usd_info_probe")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -78,4 +80,192 @@ omni_extension_test(
     kit = ":fake_kit.sh",
 )
 
-exports_files(["fake_kit.sh"])
+omni_worker_script(
+    name = "fake_usd_adapter",
+    src = "fake_usd_adapter.py",
+)
+
+omni_worker_script(
+    name = "fake_container_runner",
+    src = "fake_container_runner.py",
+)
+
+sh_test(
+    name = "nvidia_usd_adapter_cli_test",
+    srcs = ["nvidia_usd_adapter_cli_test.sh"],
+    args = [
+        "$(location //tools:nvidia_usd_convert_adapter)",
+        "$(location //tools:nvidia_usd_optimize_adapter)",
+        "$(location //tools:nvidia_usd_profile_adapter)",
+        "$(location //tools:nvidia_usd_validate_adapter)",
+    ],
+    data = [
+        "//tools:nvidia_usd_convert_adapter",
+        "//tools:nvidia_usd_optimize_adapter",
+        "//tools:nvidia_usd_profile_adapter",
+        "//tools:nvidia_usd_validate_adapter",
+    ],
+)
+
+omni_usd_validate(
+    name = "scene_validation",
+    src = "assets/scene.usda",
+    tool = ":fake_usd_adapter",
+)
+
+omni_usd_profile(
+    name = "scene_profile",
+    src = "assets/scene.usda",
+    tool = ":fake_usd_adapter",
+)
+
+omni_usd_convert(
+    name = "scene_conversion",
+    src = "assets/scene.usda",
+    tool = ":fake_usd_adapter",
+)
+
+omni_usd_optimize(
+    name = "scene_optimization",
+    src = ":scene_conversion",
+    tool = ":fake_usd_adapter",
+)
+
+omni_usd_info_probe(
+    name = "scene_optimization_info",
+    target = ":scene_optimization",
+)
+
+sh_test(
+    name = "scene_validation_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :scene_validation)",
+        "operation",
+        "validate",
+        "valid",
+        "true",
+    ],
+    data = [":scene_validation"],
+)
+
+sh_test(
+    name = "scene_profile_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :scene_profile)",
+        "operation",
+        "profile",
+        "prim_count",
+    ],
+    data = [":scene_profile"],
+)
+
+sh_test(
+    name = "scene_conversion_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :scene_conversion)",
+        "# fake convert adapter",
+    ],
+    data = [":scene_conversion"],
+)
+
+sh_test(
+    name = "scene_optimization_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :scene_optimization)",
+        "# fake optimize adapter",
+    ],
+    data = [":scene_optimization"],
+)
+
+sh_test(
+    name = "scene_optimization_info_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :scene_optimization_info)",
+        "operation=optimize",
+        "source=tests/assets/scene.usda",
+        "stage=tests/scene_optimization.usd",
+    ],
+    data = [":scene_optimization_info"],
+)
+
+# Hermetic rule-contract fixture: this does not claim real GPU execution.
+# Real hardware coverage and the primary H200-series bench are documented in
+# //examples/nativelink/gpu:README.md.
+omni_worker_script(
+    name = "fake_gpu_tool",
+    src = "fake_gpu_tool.py",
+)
+
+omni_gpu_platform(
+    name = "fake_gpu_platform",
+    constraint_values = ["//omniverse/constraints:oci_container_runtime"],
+    gpu_model = "FAKE_GPU",
+    parents = ["@platforms//host"],
+)
+
+omni_gpu_action(
+    name = "gpu_action_result",
+    srcs = ["assets/scene.usda"],
+    outs = ["gpu_action_result.json"],
+    arguments = [
+        "--input",
+        "{input}",
+        "--output",
+        "{output}",
+        "--exec-root",
+        "{execroot}",
+    ],
+    gpu_model = "FAKE_GPU",
+    tool = ":fake_gpu_tool",
+)
+
+omni_container_gpu_action(
+    name = "container_gpu_action_result",
+    srcs = [
+        "assets/scene.usda",
+        "fake_gpu_tool.py",
+    ],
+    arguments = [
+        "{execroot}/{input:fake_gpu_tool.py}",
+        "--input",
+        "{input:scene.usda}",
+    ],
+    container_env = {"FAKE_OUTPUT_DIR": "{execroot}/{output}"},
+    gpu_model = "FAKE_GPU",
+    image = "registry.example/omniverse:test",
+    runner = ":fake_container_runner",
+    tree_outs = ["container_gpu_action_result"],
+)
+
+sh_test(
+    name = "container_gpu_action_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :container_gpu_action_result)/result.json",
+        "gpu_action",
+        "true",
+    ],
+    data = [":container_gpu_action_result"],
+)
+
+sh_test(
+    name = "gpu_action_test",
+    srcs = ["assert_contains.sh"],
+    args = [
+        "$(location :gpu_action_result)",
+        "gpu_action",
+        "true",
+        "exec_root_is_dot=true",
+    ],
+    data = [":gpu_action_result"],
+)
+
+exports_files([
+    "assert_contains.sh",
+    "fake_kit.sh",
+])

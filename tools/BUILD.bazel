@@ -1,22 +1,48 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+load("//omniverse:defs.bzl", "omni_worker_script")
 
-py_binary(
+sh_binary(
     name = "assert_manifest",
     srcs = ["assert_manifest.py"],
-    main = "assert_manifest.py",
-    python_version = "PY3",
 )
 
-py_binary(
+sh_binary(
     name = "package_omniverse",
     srcs = ["package_omniverse.py"],
-    main = "package_omniverse.py",
-    python_version = "PY3",
+)
+
+omni_worker_script(
+    name = "package_omniverse_worker",
+    src = "package_omniverse.py",
+)
+
+omni_worker_script(
+    name = "nvidia_usd_validate_adapter",
+    src = "nvidia_usd_validate_adapter.py",
+)
+
+omni_worker_script(
+    name = "nvidia_usd_profile_adapter",
+    src = "nvidia_usd_profile_adapter.py",
+)
+
+omni_worker_script(
+    name = "nvidia_usd_convert_adapter",
+    src = "nvidia_usd_convert_adapter.py",
+)
+
+omni_worker_script(
+    name = "nvidia_usd_optimize_adapter",
+    src = "nvidia_usd_optimize_adapter.py",
 )
 
 exports_files([
     "assert_manifest.py",
+    "nvidia_usd_convert_adapter.py",
+    "nvidia_usd_optimize_adapter.py",
+    "nvidia_usd_profile_adapter.py",
+    "nvidia_usd_validate_adapter.py",
     "package_omniverse.py",
 ])

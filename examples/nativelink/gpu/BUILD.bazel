@@ -1,0 +1,71 @@
+load("//omniverse:defs.bzl", "omni_gpu_action", "omni_gpu_platform", "omni_worker_script")
+
+package(default_visibility = ["//visibility:public"])
+
+omni_gpu_platform(
+    name = "h200_linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    exec_properties = {
+        "OSFamily": "linux",
+        "worker_runtime": "ovphysx-0.4.13_ovrtx-0.3.0.312915_usd-optimize-1.0.4_openusd-25.11",
+    },
+    gpu_count = 1,
+    gpu_model = "H200",
+)
+
+omni_gpu_platform(
+    name = "h200_container_linux_x86_64",
+    constraint_values = [
+        "//omniverse/constraints:oci_container_runtime",
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    exec_properties = {
+        "OSFamily": "linux",
+        "container-runtime": "docker",
+    },
+    gpu_count = 1,
+    gpu_model = "H200",
+)
+
+omni_worker_script(
+    name = "h200_preflight",
+    src = "h200_preflight.py",
+)
+
+omni_gpu_action(
+    name = "capability_report",
+    outs = ["h200_capability_report.json"],
+    arguments = [
+        "--output",
+        "{output}",
+    ],
+    gpu_model = "H200",
+    mnemonic = "OmniH200CapabilityReport",
+    tags = ["manual"],
+    tool = ":h200_preflight",
+)
+
+omni_gpu_action(
+    name = "active_capability_report",
+    outs = ["h200_active_capability_report.json"],
+    arguments = [
+        "--active",
+        "--output",
+        "{output}",
+    ],
+    gpu_model = "H200",
+    mnemonic = "OmniH200ActiveCapabilityReport",
+    tags = ["manual"],
+    tool = ":h200_preflight",
+)
+
+exports_files([
+    "README.md",
+    "h200.bazelrc.example",
+    "h200_preflight.py",
+    "nativelink-h200.json5",
+])

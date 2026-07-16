@@ -1,0 +1,47 @@
+# Cut and attest a release whenever a signed v* tag is pushed.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing signed tag to release, for example v0.3.0"
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  attestations: write
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    # BCR provenance verification recognizes this community trusted builder by
+    # its semantic version ref; do not replace the ref with a commit SHA.
+    uses: bazel-contrib/.github/.github/workflows/release_ruleset.yaml@v7.7.0
+    with:
+      draft: true
+      prerelease: false
+      release_files: rules_omniverse-v*.tar.gz
+      tag_name: ${{ inputs.tag_name || github.ref_name }}
+
+  publish:
+    needs: release
+    uses: ./.github/workflows/publish.yaml
+    with:
+      tag_name: ${{ inputs.tag_name || github.ref_name }}
+    secrets:
+      BCR_PUBLISH_TOKEN: ${{ secrets.BCR_PUBLISH_TOKEN }}
+
+  finalize:
+    name: Publish attested GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft release
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v3.0.1
+        with:
+          tag_name: ${{ inputs.tag_name || github.ref_name }}
