@@ -26,10 +26,11 @@ def package_relative_path(ctx, file, strip_prefix = ""):
 
 def package_tool_attrs():
     return {
-        "_packager": attr.label(
+        "packager": attr.label(
             default = Label("//tools:package_omniverse"),
             executable = True,
             cfg = "exec",
+            doc = "Packaging executable. Override with a worker-native script for cross-platform remote execution.",
         ),
     }
 
@@ -49,7 +50,7 @@ def write_package_spec(ctx, *, name, kind, files = [], dirs = [], metadata = {},
     return spec
 
 def run_package_tool(ctx, *, spec, root, archive, metadata, inputs, mnemonic, progress):
-    packager = ctx.attr._packager[DefaultInfo].files_to_run
+    packager = ctx.attr.packager[DefaultInfo].files_to_run
     args = ctx.actions.args()
     args.add("--spec", spec)
     args.add("--root-out", root.path)

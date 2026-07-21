@@ -13,9 +13,12 @@ Required repository setup:
 1. Fork `bazelbuild/bazel-central-registry` as `TraceMachina/bazel-central-registry`.
 2. Create a classic GitHub PAT with `repo` and `workflow` scopes.
 3. Save the PAT as the `BCR_PUBLISH_TOKEN` Actions secret.
-4. Create and push a release tag such as `v0.1.0`.
-5. Run the `Publish to BCR` workflow with that tag.
+4. Create and push a signed release tag such as `v0.3.0`.
+5. Let the `Release` workflow build and attest the archive, call the `Publish
+   to BCR` workflow, and finalize the GitHub release.
 
-Attestations are disabled in this repository's workflow until releases are
-created with `bazel-contrib`'s reusable `release_ruleset` workflow.
-
+Both reusable workflows are referenced by semantic version because BCR's SLSA
+verification recognizes their trusted-builder identities. The publish job adds
+the archive, `MODULE.bazel`, and `source.json` attestations to the release and
+the generated BCR entry. The registry badge appears for that version after its
+BCR pull request merges; earlier versions are unchanged.

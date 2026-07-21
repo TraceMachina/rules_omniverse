@@ -1,13 +1,20 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
 package(default_visibility = ["//visibility:public"])
+
+sh_binary(
+    name = "container_gpu_runner",
+    srcs = ["container_gpu_runner.sh"],
+)
 
 exports_files([
     "asset.bzl",
     "bundle.bzl",
     "common.bzl",
+    "container_gpu_runner.sh",
     "extension.bzl",
     "kit_app.bzl",
     "repo_publish.bzl",
     "repositories.bzl",
     "testing.bzl",
 ])
-
