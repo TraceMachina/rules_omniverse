@@ -3,6 +3,7 @@
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 
@@ -39,7 +40,10 @@ def main() -> None:
         parser.error("a fake container command is required")
     command = [value.replace(exec_root_token, os.getcwd()) for value in command]
     if command[0].endswith(".py"):
-        command.insert(0, sys.executable)
+        python = sys.executable or shutil.which("python3")
+        if not python:
+            parser.error("python3 is required to run a Python payload")
+        command.insert(0, python)
     subprocess.run(command, check=True, env=environment)
 
 
