@@ -50,8 +50,13 @@ bazel build //:factory_assets
 
 ### Kit toolchain
 
-`rules_omniverse` does not download or bundle NVIDIA Omniverse Kit. Register an
-installed SDK only when targets must start Kit or use its `repo` publisher:
+Kit is needed only when targets must start Kit or use its `repo` publisher.
+Bundle generation, metadata validation, and standalone OpenUSD actions remain
+independent of it. Both an existing install and a hermetic download are
+supported, and either produces the same repository layout, so the labels
+(`@<name>//:kit/kit`, `@<name>//:dist`) do not change between them.
+
+**A local install:**
 
 ```starlark
 kit = use_extension("@rules_omniverse//omniverse:extensions.bzl", "kit")
@@ -65,15 +70,78 @@ use_repo(kit, "local_kit")
 register_toolchains("@local_kit//:toolchain")
 ```
 
-For a one-off invocation, set `OMNI_KIT` or put `kit` on `PATH`:
+**A hermetic download**, needing no preinstalled SDK. Kit is closed source; this
+fetches NVIDIA's published binaries for the host platform, pinned by `sha256`.
+`version` is the `kit-kernel` package version — the value an Isaac Sim release
+pins in its `deps/kit-sdk.packman.xml`:
+
+```starlark
+kit = use_extension("@rules_omniverse//omniverse:extensions.bzl", "kit")
+kit.download(
+    name = "kit",
+    version = "110.1.1+production",  # as pinned by Isaac Sim 6.0.0
+)
+use_repo(kit, "kit")
+register_toolchains("@kit//:toolchain")
+```
+
+Digests for known versions ship with the ruleset; for any other version pass them
+per platform, e.g. `sha256 = {"manylinux_2_35_x86_64": "<digest>"}`. Linux
+x86_64/aarch64 and Windows x86_64 packages are addressable; the host platform is
+detected unless `abi` is set.
+
+For a one-off invocation with neither, set `OMNI_KIT` or put `kit` on `PATH`:
 
 ```bash
 OMNI_KIT=/opt/nvidia/omniverse/kit/kit bazel run //path/to:my_app
 ```
 
 Without a registered toolchain, `OMNI_KIT`, or `kit` command, a Kit launcher
-exits with configuration instructions. Bundle generation, metadata validation,
-and standalone OpenUSD actions remain independent of Kit.
+exits with configuration instructions.
+
+### Prebuilt-only Kit extensions
+
+Many `omni.*` extensions — `omni.replicator.core`, the RTX renderer, `omni.graph`
+— are published only as prebuilt packages. `kit.extensions()` fetches a pinned
+set of them so that nothing is resolved from the extension registry at run time:
+
+```starlark
+kit.extensions(
+    name = "kit_exts",
+    lock = "//third_party/kit:exts_lock.json",
+)
+use_repo(kit, "kit_exts")
+```
+
+The lock is JSON, mapping each registry packageId to its archive:
+
+```json
+{
+  "omni.replicator.core-1.13.27+110.1.1.lx64.r.cp312": {
+    "name": "omni.replicator.core",
+    "url": "https://d4i3qtqj3r0z5.cloudfront.net/omni.replicator.core-1.13.27%2B110.1.1.lx64.r.cp312.zip",
+    "sha256": "88585a20a63fb079a077e5a454917eedcfc5e2306b3e1eb60fb042561dbc35cd"
+  }
+}
+```
+
+Let Kit resolve the dependency closure rather than deriving it by hand
+(`kit <app>.kit --no-window --enable <ext> --ext-precache-mode`), then read the
+resolved packageIds out of the app's extension directory and look each one up in
+the local registry index, whose records carry an `archivePath`.
+
+The generated hub repository exposes:
+
+- `@kit_exts//:exts` — every extension's files, for a target's `data`
+- `@kit_exts//:manifest.txt` — one `<packageId>\t<runfiles path of
+  config/extension.toml>` line per extension
+
+Kit derives part of an extension's identity from the name of the directory
+containing it, so a launcher should build a directory of symlinks named by
+packageId and pass that as `--ext-folder`; the manifest exists to make that a few
+lines of shell. Naming those entries after their Bazel repositories instead makes
+Kit fail to resolve versions locally and silently fall back to downloading from
+the registry.
 
 ### Standalone NVIDIA USD adapters
 
