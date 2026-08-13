@@ -267,3 +267,5 @@ execution properties, and `ctx.actions.run`.
 - Referenced USD dependencies must be declared explicitly for correct caching.
 - Streaming services and mutable search endpoints are runtime orchestration,
   not hermetic cacheable transformations.
+
+(c) Trace Machina Inc 2026. 
