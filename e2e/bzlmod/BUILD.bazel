@@ -42,6 +42,10 @@ omni_repo_publish_config(
 
 omni_manifest_test(
     name = "extension_metadata_test",
+    expected_files = [
+        "config/extension.toml",
+        "com/nativelink/bcr/viewer/__init__.py",
+    ],
     expected_name = "com.nativelink.bcr.viewer",
     kind = "extension",
     target = ":extension",

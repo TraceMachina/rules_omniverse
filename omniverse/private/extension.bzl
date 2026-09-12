@@ -3,6 +3,31 @@
 load("//omniverse:providers.bzl", "OmniExtensionInfo")
 load("//omniverse/private:common.bzl", "collect_default_files", "package_relative_path", "package_tool_attrs", "run_package_tool", "write_package_spec")
 
+_MANIFEST_DIR = "config"
+
+def _extension_root(manifest):
+    """Returns the source directory Kit would treat as the extension root.
+
+    Kit discovers an extension through `<root>/config/extension.toml`, so the
+    manifest's grandparent directory is the only root that produces a loadable
+    package. An empty string means the workspace root.
+    """
+    segments = manifest.short_path.split("/")
+    if len(segments) < 2 or segments[-2] != _MANIFEST_DIR:
+        fail(
+            "omni_extension manifest %s must live at <extension root>/%s/%s; " % (manifest.short_path, _MANIFEST_DIR, manifest.basename) +
+            "set strip_prefix or manifest_path to package a different layout",
+        )
+    return "/".join(segments[:-2])
+
+def _root_relative_path(file, root):
+    if not root:
+        return file.short_path
+    prefix = root + "/"
+    if not file.short_path.startswith(prefix):
+        fail("omni_extension src %s is outside the extension root %s" % (file.short_path, root))
+    return file.short_path[len(prefix):]
+
 def _omni_extension_impl(ctx):
     manifest = ctx.file.manifest
     files = []
@@ -20,15 +45,21 @@ def _omni_extension_impl(ctx):
         })
         inputs.append(file)
 
-    manifest_dest = ctx.attr.manifest_path
-    if not manifest_dest:
-        manifest_dest = package_relative_path(ctx, manifest, ctx.attr.strip_prefix)
-    add_file(manifest, manifest_dest, "manifest")
+    if ctx.attr.strip_prefix or ctx.attr.manifest_path:
+        def destination(file):
+            return package_relative_path(ctx, file, ctx.attr.strip_prefix)
+    else:
+        root = _extension_root(manifest)
+
+        def destination(file):
+            return _root_relative_path(file, root)
+
+    add_file(manifest, ctx.attr.manifest_path or destination(manifest), "manifest")
 
     for file in collect_default_files(ctx.attr.srcs):
         if file.path == manifest.path:
             continue
-        add_file(file, package_relative_path(ctx, file, ctx.attr.strip_prefix))
+        add_file(file, destination(file))
 
     native_dest_prefix = "bin/%s/%s" % (ctx.attr.target_platform, ctx.attr.build_config)
     for file in collect_default_files(ctx.attr.native_plugins):
@@ -112,10 +143,10 @@ _attrs = {
     "manifest": attr.label(
         allow_single_file = True,
         mandatory = True,
-        doc = "extension.toml manifest file.",
+        doc = "extension.toml manifest file. Unless strip_prefix or manifest_path is set, its parent config/ directory's parent becomes the extension root.",
     ),
     "manifest_path": attr.string(
-        doc = "Destination path for the manifest inside the extension package.",
+        doc = "Destination path for the manifest inside the extension package. Setting it disables extension root inference.",
     ),
     "native_plugins": attr.label_list(
         allow_files = True,
@@ -130,7 +161,7 @@ _attrs = {
         doc = "Enable stricter manifest validation.",
     ),
     "strip_prefix": attr.string(
-        doc = "Optional prefix stripped from src destination paths.",
+        doc = "Optional prefix stripped from src destination paths. Defaults to the directory containing the manifest's config/ directory.",
     ),
     "target_platform": attr.string(
         default = "linux-x86_64",
