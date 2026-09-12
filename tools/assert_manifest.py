@@ -12,6 +12,12 @@ def main(argv):
     parser.add_argument("--kind")
     parser.add_argument("--name")
     parser.add_argument("--version")
+    parser.add_argument(
+        "--expect-file",
+        action="append",
+        default=[],
+        help="Destination path that must appear in metadata files[].dest.",
+    )
     args = parser.parse_args(argv)
 
     with open(args.metadata, encoding="utf-8") as f:
@@ -31,6 +37,13 @@ def main(argv):
         {item["dest"] for item in metadata["files"]}
     ):
         raise AssertionError("metadata contains duplicate file destinations")
+    destinations = {item["dest"] for item in metadata.get("files", [])}
+    missing = [dest for dest in args.expect_file if dest not in destinations]
+    if missing:
+        raise AssertionError(
+            f"metadata is missing expected files {missing!r}; "
+            f"packaged files: {sorted(destinations)!r}"
+        )
 
 
 if __name__ == "__main__":

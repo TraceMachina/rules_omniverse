@@ -2,6 +2,18 @@
 
 All notable changes to `rules_omniverse` are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- `omni_extension` now places `config/extension.toml` at the packaged root.
+  The extension root is inferred from the manifest location instead of the
+  Bazel package, so an extension under `<pkg>/<dir>/config/extension.toml` no
+  longer packages as `<dir>/config/extension.toml`, a layout Kit does not load.
+  Explicit `strip_prefix` or `manifest_path` keep their previous behavior.
+- `omni_manifest_test` accepts `expected_files` to assert packaged
+  destination paths.
+
 ## [0.3.0] - 2026-07-16
 
 ### Added

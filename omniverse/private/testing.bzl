@@ -26,6 +26,8 @@ def _omni_manifest_test_impl(ctx):
         args.extend(["--name", ctx.attr.expected_name])
     if ctx.attr.version:
         args.extend(["--version", ctx.attr.version])
+    for dest in ctx.attr.expected_files:
+        args.extend(["--expect-file", dest])
     arg_text = " ".join(["'%s'" % arg.replace("'", "'\\''") for arg in args])
     content = """#!/usr/bin/env bash
 set -euo pipefail
@@ -55,6 +57,9 @@ omni_manifest_test = rule(
     test = True,
     attrs = {
         "kind": attr.string(doc = "Expected metadata kind."),
+        "expected_files": attr.string_list(
+            doc = "Destination paths that must exist in the packaged root, relative to it.",
+        ),
         "expected_name": attr.string(doc = "Expected metadata name."),
         "target": attr.label(mandatory = True, doc = "Target with Omniverse metadata."),
         "version": attr.string(doc = "Expected version, when present."),

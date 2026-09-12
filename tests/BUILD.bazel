@@ -53,6 +53,10 @@ omni_repo_publish_config(
 
 omni_manifest_test(
     name = "extension_metadata_test",
+    expected_files = [
+        "config/extension.toml",
+        "com/nativelink/test/viewer/__init__.py",
+    ],
     expected_name = "com.nativelink.test.viewer",
     kind = "extension",
     target = ":extension",
