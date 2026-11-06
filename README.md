@@ -31,6 +31,7 @@ Nothing is downloaded or bundled on your behalf — the ruleset schedules the to
 - 🧩 **Kit application builds** — generate `.kit` apps and launchers from a locally registered Kit SDK toolchain.
 - ✅ **USD validation, profiling, conversion, and optimization** — via explicit, swappable adapter executables for NVIDIA's standalone USD tooling.
 - 🖥️ **GPU actions as build steps** — declare GPU model, count, and execution properties per target; run tools or full OCI containers on GPU workers.
+- 🤖 **Isaac Sim actions** — run headless Isaac Sim scripts, such as Replicator data generation, in a digest-pinned image as cacheable GPU actions that fail when the script crashes, even though Kit exits 0.
 - ☁️ **Remote execution ready** — designed for REAPI backends, with [NativeLink](https://nativelink.com) as the reference GPU scheduler.
 - 🔍 **Honest caching** — actions only share a cache identity when their SDK stacks are actually compatible.
 
@@ -161,6 +162,39 @@ Passing `gpu = True` to a USD rule constrains that action to an NVIDIA GPU execu
 
 Container actions additionally require `//omniverse/constraints:oci_container_runtime`. Image tags or digests, runtime command, network mode, shared memory, declared files/directories, and named worker environment forwarding are all configurable. Digest pinning is recommended for deployments that require stronger provenance, but it is not a ruleset requirement.
 
+## Isaac Sim
+
+`isaac_sim_action` runs a headless NVIDIA Isaac Sim script, such as a Replicator data generation script, in a pinned Isaac Sim image as one cacheable GPU container action. `isaac_sim_platform` declares the matching execution platform.
+
+```starlark
+load("@rules_omniverse//omniverse:defs.bzl", "isaac_sim_action", "isaac_sim_platform")
+
+isaac_sim_platform(
+    name = "isaac_sim_linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    driver = "595.99.02",  # The worker's NVIDIA driver; sets worker_runtime.
+    gpu_model = "L40S",
+)
+
+isaac_sim_action(
+    name = "dataset",
+    image = "nvcr.io/nvidia/isaac-sim:6.2.0.1@sha256:...",  # A digest is required.
+    script = "generate.py",
+    arguments = ["--config", "{input:config.yaml}", "--output_dir", "{output}"],
+    scene = "stage.usda",
+    assets = ["robot.usda", "//textures"],
+    data = ["config.yaml"],
+    gpu_model = "L40S",
+)
+```
+
+- **The image is pinned by `@sha256:` digest**, because it is part of the action's identity. So is `worker_runtime = "nvidia-driver-<driver>"`: results from different drivers never share a cache entry.
+- **Every local file the scene uses is declared** in `scene` or `assets`. Before the script starts, the launcher computes the scene's dependencies with OpenUSD and fails the action naming every undeclared file, so a missing texture cannot produce a stale cache hit.
+- **The output is the `<name>_out` directory.** `{output}` is replaced by its path, and `{input:NAME}` by the path of the declared input named `NAME`. The action fails when the script raises or exits non-zero, even though Kit exits 0, and when the output is empty.
+
 ## Rules reference
 
 ### Omniverse and packaging
@@ -190,6 +224,8 @@ Packaging rules accept a configurable `packager` executable. Their default uses 
 | `omni_container_gpu_action` | Execute a declared OCI GPU workload |
 | `omni_gpu_platform` | Declare GPU constraints and scheduler properties |
 | `omni_worker_script` | Upload a worker-side script without embedding the Bazel client's interpreter |
+| `isaac_sim_action` | Run a headless Isaac Sim script in a pinned image and capture its output directory |
+| `isaac_sim_platform` | Declare a GPU platform for Isaac Sim containers with driver-specific cache identity |
 
 USD arguments support `{src}`, `{out}`, and `{report}` placeholders. Additional files such as referenced layers, textures, profiles, or configuration must be declared through `data` so they participate in the action key.
 
@@ -229,7 +265,7 @@ See [`examples/nativelink/gpu`](examples/nativelink/gpu/README.md) for worker co
 
 The `fake_gpu` fixtures under `//tests` and `//e2e/bzlmod` verify Starlark analysis, constraints, arguments, declared artifacts, and external-module use without reserving a GPU. They do not claim CUDA or SDK execution.
 
-Real-hardware coverage is separate. The primary reference bench is the H200 series, currently exercised with NativeLink 1.6.1, CUDA-enabled PyTorch, `ovphysx`, and standalone NVIDIA USD tooling. H200 is a tested bench, not a ruleset requirement.
+Real-hardware coverage is separate. The primary reference bench is the H200 series, currently exercised with NativeLink 1.6.1, CUDA-enabled PyTorch, `ovphysx`, and standalone NVIDIA USD tooling. H200 is a tested bench, not a ruleset requirement. The Isaac Sim rules are tested on an L40S with Isaac Sim 6.2.0.1 and NativeLink 1.8.3.
 
 ```sh
 bazel test //...
@@ -246,6 +282,7 @@ The standalone Bzlmod consumer is under `e2e/bzlmod`.
 Consumers should load public rules from `//omniverse:defs.bzl`:
 
 - `omniverse/private/gpu.bzl` — GPU actions, containers, platforms, and workers.
+- `omniverse/private/isaac_sim.bzl` — Isaac Sim actions and platforms.
 - `omniverse/private/usd.bzl` — adapter-based USD actions.
 - `omniverse/providers.bzl` — typed providers returned by public rules.
 - `tools/` — built-in packaging and real NVIDIA adapter entry points.
@@ -260,6 +297,8 @@ We prefer to state limits explicitly rather than let you discover them:
 - Kit execution and Kit `repo` publishing require an installed Kit SDK.
 - Standalone NVIDIA libraries must be installed in the selected worker runtime.
 - Referenced USD dependencies must be declared explicitly for correct caching.
+- An `isaac_sim_action` script must run in the launcher's process and must not exec into another program (`os.execv` and friends); the run then fails with `no completion report`. Errors Kit catches and only logs, and exceptions the script catches itself, are not detected.
+- Local `isaac_sim_action` runs mount whole source folders read-only, so a script can read undeclared files that are not in the cache key. Online content and the worker's cache mounts are not in the cache key either.
 - Streaming services and mutable search endpoints are runtime orchestration, not hermetic cacheable transformations.
 
 ## Contributing

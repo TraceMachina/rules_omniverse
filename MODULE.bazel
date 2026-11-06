@@ -6,3 +6,21 @@ module(
 
 bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "platforms", version = "1.0.0")
+
+# Test-only dependencies for //tests/isaac_sim/... (not seen by consumers).
+bazel_dep(name = "bazel_skylib", version = "1.8.1", dev_dependency = True)
+bazel_dep(name = "rules_python", version = "1.6.3", dev_dependency = True)
+
+python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency = True)
+python.toolchain(
+    is_default = True,
+    python_version = "3.11",
+)
+
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_dependency = True)
+pip.parse(
+    hub_name = "isaac_sim_test_pip",
+    python_version = "3.11",
+    requirements_lock = "//tests/isaac_sim:requirements_lock.txt",
+)
+use_repo(pip, "isaac_sim_test_pip")

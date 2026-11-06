@@ -1,7 +1,15 @@
+load("@isaac_sim_test_pip//:requirements.bzl", "requirement")
+load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
-# Container runner tests. They share container_runner_lib.sh, which puts a
-# fake docker on PATH.
+# Tests of the container runner and the Isaac Sim launcher. Analysis and query
+# tests of isaac_sim_action and isaac_sim_platform, including the rule side of
+# the runner's output and input flags, live in ./rules so the tests here do not
+# depend on the new macros.
+
+# Runner tests. They share container_runner_lib.sh, which puts a fake docker
+# on PATH.
 [sh_test(
     name = "container_runner_%s_test" % name,
     srcs = ["container_runner_%s_test.sh" % name],
@@ -20,3 +28,54 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
     "unresolvable_input",  # a symlinked input whose directory cannot be resolved fails
     "signal",  # SIGTERM or SIGINT kills the container, then hands the output back
 ]]
+
+py_library(
+    name = "launcher_testing",
+    testonly = True,
+    srcs = ["launcher_testing.py"],
+    imports = ["."],
+)
+
+# Every launcher test lists the launcher in data and names it in env.
+_LAUNCHER = "//omniverse/private:isaac_sim_launcher.py"
+
+_LAUNCHER_ENV = {"ISAAC_SIM_LAUNCHER": "$(rootpath %s)" % _LAUNCHER}
+
+# Scene dependency check and exit codes, with OpenUSD's usd-core.
+py_test(
+    name = "isaac_sim_launcher_test",
+    srcs = ["isaac_sim_launcher_test.py"],
+    data = [_LAUNCHER] + glob(["scene/**"]),
+    env = _LAUNCHER_ENV | {"ISAAC_SIM_TEST_SCENE": "$(rootpath scene/root.usda)"},
+    deps = [
+        ":launcher_testing",
+        requirement("usd-core"),
+    ],
+)
+
+# Finding pxr in the image's extension cache. No usd-core here: the only pxr
+# is the stub in the fake image.
+py_test(
+    name = "isaac_sim_launcher_pxr_test",
+    srcs = ["isaac_sim_launcher_pxr_test.py"],
+    data = [_LAUNCHER],
+    env = _LAUNCHER_ENV,
+    deps = [":launcher_testing"],
+)
+
+# How the launcher runs the script and learns how it ended: exit status, the
+# wrapper file and close() reports. fake_isaacsim/ is a
+# stub of Isaac Sim's isaacsim package whose SimulationApp (kit/fake_kit.py)
+# ends its process like Kit. image/ lays the package out as in the image;
+# package/ is a second layout, which the close() tests also run with.
+py_test(
+    name = "isaac_sim_launcher_script_test",
+    srcs = ["isaac_sim_launcher_script_test.py"],
+    data = [_LAUNCHER] + glob(["fake_isaacsim/**/*.py"]),
+    env = _LAUNCHER_ENV | {
+        "FAKE_ISAACSIM": "$(rootpath fake_isaacsim/image/isaacsim/__init__.py)",
+        "FAKE_ISAACSIM_PACKAGE": "$(rootpath fake_isaacsim/package/isaacsim/__init__.py)",
+        "FAKE_KIT": "$(rootpath fake_isaacsim/kit/fake_kit.py)",
+    },
+    deps = [":launcher_testing"],
+)

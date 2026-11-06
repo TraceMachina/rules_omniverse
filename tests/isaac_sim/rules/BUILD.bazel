@@ -1,0 +1,533 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//omniverse:defs.bzl", "isaac_sim_action", "isaac_sim_platform")
+load(
+    ":action_test.bzl",
+    "action_absolute_script_test",
+    "action_container_env_test",
+    "action_input_flags_test",
+    "action_rejects_frames_test",
+    "action_rejects_input_placeholder_test",
+    "action_requires_digest_test",
+    "action_runner_flag_test",
+    "action_script_args_test",
+    "action_test",
+    "platform_rejects_container_runtime_test",
+    "platform_rejects_worker_runtime_test",
+)
+
+# Tests of isaac_sim_action and isaac_sim_platform. The isaac_sim_action
+# targets below are only analysed, never executed; they are tagged manual so
+# `bazel build //...` skips them.
+
+_IMAGE = "nvcr.io/nvidia/isaac-sim@sha256:4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c"
+
+# The action's shape, with every optional attribute set.
+isaac_sim_action(
+    name = "action_full",
+    arguments = [
+        "--output_dir",
+        "{output}",
+        "--rgb_dir={output}/rgb",
+        "--headless",
+    ],
+    assets = [
+        "testdata/robot.usda",
+        "testdata/table.usda",
+    ],
+    data = ["testdata/config.yaml"],
+    frames = 12,
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    scene = "testdata/stage.usda",
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_test(
+    name = "action_test",
+    expected_container_args = [
+        "omniverse/private/isaac_sim_launcher.py",
+        "--scene",
+        "tests/isaac_sim/rules/testdata/stage.usda",
+        "--asset",
+        "tests/isaac_sim/rules/testdata/robot.usda",
+        "--asset",
+        "tests/isaac_sim/rules/testdata/table.usda",
+        "--",
+        "tests/isaac_sim/rules/testdata/generate.py",
+        "--output_dir",
+        "{output}",
+        "--rgb_dir={output}/rgb",
+        "--headless",
+        "--frames",
+        "12",
+    ],
+    expected_image = _IMAGE,
+    expected_inputs = [
+        "tests/isaac_sim/rules/testdata/generate.py",
+        "tests/isaac_sim/rules/testdata/stage.usda",
+        "tests/isaac_sim/rules/testdata/robot.usda",
+        "tests/isaac_sim/rules/testdata/table.usda",
+        "tests/isaac_sim/rules/testdata/config.yaml",
+    ],
+    target_under_test = ":action_full",
+)
+
+# The action's shape with only required attributes; no --scene, --asset or
+# --frames, network overridden.
+isaac_sim_action(
+    name = "action_minimal",
+    arguments = ["--out={output}"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    network = "none",
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_test(
+    name = "action_minimal_test",
+    expected_container_args = [
+        "omniverse/private/isaac_sim_launcher.py",
+        "--",
+        "tests/isaac_sim/rules/testdata/generate.py",
+        "--out={output}",
+    ],
+    expected_image = _IMAGE,
+    expected_inputs = ["tests/isaac_sim/rules/testdata/generate.py"],
+    expected_network = "none",
+    target_under_test = ":action_minimal",
+)
+
+# A tag instead of a digest must fail analysis.
+isaac_sim_action(
+    name = "action_without_digest",
+    gpu_model = "FAKE_GPU",
+    image = "nvcr.io/nvidia/isaac-sim:5.0.0",
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_requires_digest_test(
+    name = "action_requires_digest_test",
+    target_under_test = ":action_without_digest",
+)
+
+# frames must be positive.
+isaac_sim_action(
+    name = "action_zero_frames",
+    frames = 0,
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_rejects_frames_test(
+    name = "action_rejects_zero_frames_test",
+    target_under_test = ":action_zero_frames",
+)
+
+isaac_sim_action(
+    name = "action_negative_frames",
+    frames = -1,
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_rejects_frames_test(
+    name = "action_rejects_negative_frames_test",
+    target_under_test = ":action_negative_frames",
+)
+
+# worker_runtime comes from driver; the caller may not set it directly.
+isaac_sim_platform(
+    name = "platform_with_worker_runtime",
+    driver = "580.65.06",
+    exec_properties = {"worker_runtime": "nvidia-driver-550.54.15"},
+    gpu_model = "H200",
+    tags = ["manual"],
+)
+
+platform_rejects_worker_runtime_test(
+    name = "platform_rejects_worker_runtime_test",
+    target_under_test = ":platform_with_worker_runtime",
+)
+
+# container-runtime is fixed to docker; the caller may not set it, even
+# to "docker".
+isaac_sim_platform(
+    name = "platform_with_podman",
+    driver = "580.65.06",
+    exec_properties = {"container-runtime": "podman"},
+    gpu_model = "H200",
+    tags = ["manual"],
+)
+
+platform_rejects_container_runtime_test(
+    name = "platform_rejects_container_runtime_test",
+    target_under_test = ":platform_with_podman",
+)
+
+isaac_sim_platform(
+    name = "platform_with_docker_runtime",
+    driver = "580.65.06",
+    exec_properties = {"container-runtime": "docker"},
+    gpu_model = "H200",
+    tags = ["manual"],
+)
+
+platform_rejects_container_runtime_test(
+    name = "platform_rejects_container_runtime_docker_test",
+    target_under_test = ":platform_with_docker_runtime",
+)
+
+# Platform exec_properties and constraints, read from the expanded
+# platform() with genquery (Starlark cannot read PlatformInfo without an
+# experimental flag).
+isaac_sim_platform(
+    name = "h200_platform",
+    constraint_values = ["@platforms//os:linux"],
+    driver = "580.65.06",
+    exec_properties = {"OSFamily": "Linux"},
+    gpu_count = 8,
+    gpu_model = "H200",
+)
+
+genquery(
+    name = "h200_platform_query",
+    expression = "//tests/isaac_sim/rules:h200_platform",
+    opts = ["--output=build"],
+    scope = [":h200_platform"],
+)
+
+sh_test(
+    name = "platform_properties_test",
+    srcs = ["platform_properties_test.sh"],
+    args = ["$(location :h200_platform_query)"],
+    data = [":h200_platform_query"],
+)
+
+# None for constraint_values and exec_properties is the same as empty, as
+# for omni_gpu_platform.
+isaac_sim_platform(
+    name = "platform_none_lists",
+    constraint_values = None,
+    driver = "595.99.02",
+    exec_properties = None,
+    gpu_model = "L40S",
+)
+
+genquery(
+    name = "platform_none_lists_query",
+    expression = "//tests/isaac_sim/rules:platform_none_lists",
+    opts = ["--output=build"],
+    scope = [":platform_none_lists"],
+)
+
+sh_test(
+    name = "platform_none_lists_test",
+    srcs = ["//tests:assert_contains.sh"],
+    args = [
+        "$(location :platform_none_lists_query)",
+        "nvidia-driver-595.99.02",
+        "docker",
+        "L40S",
+        "//omniverse/constraints:oci_container_runtime",
+        "//omniverse/constraints:nvidia_gpu",
+    ],
+    data = [":platform_none_lists_query"],
+)
+
+# isaac_sim_action asks the runner to open its output for the container's
+# user and give it back afterwards.
+action_runner_flag_test(
+    name = "action_writable_output_flag_test",
+    flag = "--writable-output",
+    target_under_test = ":action_minimal",
+)
+
+# no-sandbox by default, so local runs see real input files. Starlark cannot
+# read an action's execution requirements, so like the platform tests this
+# reads the expanded rule's execution_requirements attribute with genquery.
+genquery(
+    name = "action_minimal_query",
+    expression = "//tests/isaac_sim/rules:action_minimal",
+    opts = ["--output=build"],
+    scope = [":action_minimal"],
+)
+
+sh_test(
+    name = "action_no_sandbox_test",
+    srcs = ["execution_requirements_test.sh"],
+    args = [
+        "$(location :action_minimal_query)",
+        "no-sandbox=1",
+    ],
+    data = [":action_minimal_query"],
+)
+
+# A caller's execution_requirements are added to no-sandbox.
+isaac_sim_action(
+    name = "action_with_requirements",
+    execution_requirements = {"no-local": "1"},
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+genquery(
+    name = "action_with_requirements_query",
+    expression = "//tests/isaac_sim/rules:action_with_requirements",
+    opts = ["--output=build"],
+    scope = [":action_with_requirements"],
+)
+
+sh_test(
+    name = "action_no_sandbox_with_requirements_test",
+    srcs = ["execution_requirements_test.sh"],
+    args = [
+        "$(location :action_with_requirements_query)",
+        "no-sandbox=1",
+        "no-local=1",
+    ],
+    data = [":action_with_requirements_query"],
+)
+
+# isaac_sim_action asks the runner to fail on an empty output.
+action_runner_flag_test(
+    name = "action_nonempty_output_flag_test",
+    flag = "--require-nonempty-output",
+    target_under_test = ":action_minimal",
+)
+
+# The script reaches the launcher as an absolute path.
+action_absolute_script_test(
+    name = "action_absolute_script_test",
+    expected_script = "tests/isaac_sim/rules/testdata/generate.py",
+    target_under_test = ":action_full",
+)
+
+# isaac_sim_action names every file the container reads, so the runner can
+# mount the targets of symlinked inputs.
+action_input_flags_test(
+    name = "action_input_flags_test",
+    expected_inputs = [
+        "tests/isaac_sim/rules/testdata/generate.py",
+        "tests/isaac_sim/rules/testdata/stage.usda",
+        "tests/isaac_sim/rules/testdata/robot.usda",
+        "tests/isaac_sim/rules/testdata/table.usda",
+        "tests/isaac_sim/rules/testdata/config.yaml",
+    ],
+    target_under_test = ":action_full",
+)
+
+action_input_flags_test(
+    name = "action_minimal_input_flags_test",
+    expected_inputs = ["tests/isaac_sim/rules/testdata/generate.py"],
+    target_under_test = ":action_minimal",
+)
+
+# {input:NAME} is replaced by the absolute path of the one input file with
+# that basename, among script, scene, assets and data.
+genrule(
+    name = "generated_config",
+    outs = ["generated_config.yaml"],
+    cmd = "printf 'seed: 3\\n' > $@",
+    tags = ["manual"],
+)
+
+isaac_sim_action(
+    name = "action_input_generated",
+    arguments = [
+        "--config",
+        "{input:generated_config.yaml}",
+    ],
+    data = [":generated_config"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_script_args_test(
+    name = "action_input_placeholder_generated_test",
+    expected_script_args = [
+        "--config",
+        "{execroot}/{bindir}/tests/isaac_sim/rules/generated_config.yaml",
+    ],
+    target_under_test = ":action_input_generated",
+)
+
+# Source files resolve from each of script, scene, assets and data, as a
+# whole argument or a substring.
+isaac_sim_action(
+    name = "action_input_source",
+    arguments = [
+        "--config",
+        "{input:config.yaml}",
+        "--stage={input:stage.usda}",
+        "{input:robot.usda}",
+        "--self={input:generate.py}",
+    ],
+    assets = ["testdata/robot.usda"],
+    data = ["testdata/config.yaml"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    scene = "testdata/stage.usda",
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_script_args_test(
+    name = "action_input_placeholder_source_test",
+    expected_script_args = [
+        "--config",
+        "{execroot}/tests/isaac_sim/rules/testdata/config.yaml",
+        "--stage={execroot}/tests/isaac_sim/rules/testdata/stage.usda",
+        "{execroot}/tests/isaac_sim/rules/testdata/robot.usda",
+        "--self={execroot}/tests/isaac_sim/rules/testdata/generate.py",
+    ],
+    target_under_test = ":action_input_source",
+)
+
+# One file listed twice is one file, not ambiguous.
+isaac_sim_action(
+    name = "action_input_same_file",
+    arguments = ["{input:generate.py}"],
+    data = ["testdata/generate.py"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_script_args_test(
+    name = "action_input_placeholder_same_file_test",
+    expected_script_args = ["{execroot}/tests/isaac_sim/rules/testdata/generate.py"],
+    target_under_test = ":action_input_same_file",
+)
+
+# {output} keeps working beside {input:NAME}.
+isaac_sim_action(
+    name = "action_input_with_output",
+    arguments = [
+        "--output_dir",
+        "{output}",
+        "--rgb_dir={output}/rgb",
+        "--config={input:config.yaml}",
+    ],
+    data = ["testdata/config.yaml"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_script_args_test(
+    name = "action_input_placeholder_with_output_test",
+    expected_script_args = [
+        "--output_dir",
+        "{output}",
+        "--rgb_dir={output}/rgb",
+        "--config={execroot}/tests/isaac_sim/rules/testdata/config.yaml",
+    ],
+    target_under_test = ":action_input_with_output",
+)
+
+# A name that matches no input fails analysis.
+isaac_sim_action(
+    name = "action_input_missing",
+    arguments = [
+        "--config",
+        "{input:missing.yaml}",
+    ],
+    data = ["testdata/config.yaml"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_rejects_input_placeholder_test(
+    name = "action_input_placeholder_missing_test",
+    expected_messages = ["{input:missing.yaml}"],
+    target_under_test = ":action_input_missing",
+)
+
+# A name that matches two different inputs fails analysis, naming both.
+isaac_sim_action(
+    name = "action_input_ambiguous",
+    arguments = [
+        "--config",
+        "{input:config.yaml}",
+    ],
+    data = [
+        "testdata/config.yaml",
+        "testdata/other/config.yaml",
+    ],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_rejects_input_placeholder_test(
+    name = "action_input_placeholder_ambiguous_test",
+    expected_messages = [
+        "{input:config.yaml}",
+        "ambiguous",
+        "tests/isaac_sim/rules/testdata/config.yaml",
+        "tests/isaac_sim/rules/testdata/other/config.yaml",
+    ],
+    target_under_test = ":action_input_ambiguous",
+)
+
+# Inputs may share a basename as long as no {input:NAME} names it.
+isaac_sim_action(
+    name = "action_shared_basename",
+    arguments = ["--config=config.yaml"],
+    data = [
+        "testdata/config.yaml",
+        "testdata/other/config.yaml",
+    ],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_script_args_test(
+    name = "action_shared_basename_test",
+    expected_script_args = ["--config=config.yaml"],
+    target_under_test = ":action_shared_basename",
+)
+
+# container_env values take the same placeholders as args.
+isaac_sim_action(
+    name = "action_container_env",
+    container_env = {
+        "SDG_CONFIG": "{input:config.yaml}",
+        "SDG_LOG_DIR": "{output}/logs",
+        "SDG_MODE": "plain",
+    },
+    data = ["testdata/config.yaml"],
+    gpu_model = "FAKE_GPU",
+    image = _IMAGE,
+    script = "testdata/generate.py",
+    tags = ["manual"],
+)
+
+action_container_env_test(
+    name = "action_container_env_test",
+    expected_env = [
+        "SDG_CONFIG={execroot}/tests/isaac_sim/rules/testdata/config.yaml",
+        "SDG_LOG_DIR={output}/logs",
+        "SDG_MODE=plain",
+        "ACCEPT_EULA=Y",
+    ],
+    target_under_test = ":action_container_env",
+)
