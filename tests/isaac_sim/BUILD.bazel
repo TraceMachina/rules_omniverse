@@ -1,0 +1,22 @@
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+# Container runner tests. They share container_runner_lib.sh, which puts a
+# fake docker on PATH.
+[sh_test(
+    name = "container_runner_%s_test" % name,
+    srcs = ["container_runner_%s_test.sh" % name],
+    args = ["$(rootpath //omniverse/private:container_gpu_runner.sh)"],
+    data = [
+        "container_runner_lib.sh",
+        "//omniverse/private:container_gpu_runner.sh",
+    ],
+) for name in [
+    "cache_mounts",  # worker cache mounts
+    "malformed_mounts",  # a malformed cache mount entry fails
+    "empty_lists",  # no --env or --forward-env, on bash 3.2
+    "writable_output",  # output opened for the container user, ownership given back
+    "nonempty_output",  # an empty output fails even when the container exits 0
+    "input_mounts",  # targets of symlinked inputs are mounted
+    "unresolvable_input",  # a symlinked input whose directory cannot be resolved fails
+    "signal",  # SIGTERM or SIGINT kills the container, then hands the output back
+]]
