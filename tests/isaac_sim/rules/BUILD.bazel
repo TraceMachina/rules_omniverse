@@ -11,6 +11,7 @@ load(
     "action_runner_flag_test",
     "action_script_args_test",
     "action_test",
+    "example_config_resolves_test",
     "platform_rejects_container_runtime_test",
     "platform_rejects_worker_runtime_test",
 )
@@ -311,6 +312,28 @@ action_absolute_script_test(
     target_under_test = ":action_full",
 )
 
+# The example uses the pinned Isaac Sim 6.2.0.1 image, read from the expanded
+# target with genquery as in the platform tests.
+genquery(
+    name = "example_scene_based_sdg_query",
+    expression = "//examples/isaac_sim:scene_based_sdg",
+    opts = ["--output=build"],
+    scope = ["//examples/isaac_sim:scene_based_sdg"],
+)
+
+sh_test(
+    name = "example_image_pin_test",
+    srcs = ["example_image_pin_test.sh"],
+    args = [
+        "$(location :example_scene_based_sdg_query)",
+        "$(location //examples/isaac_sim:isaac_sim.pin)",
+    ],
+    data = [
+        ":example_scene_based_sdg_query",
+        "//examples/isaac_sim:isaac_sim.pin",
+    ],
+)
+
 # isaac_sim_action names every file the container reads, so the runner can
 # mount the targets of symlinked inputs.
 action_input_flags_test(
@@ -530,4 +553,19 @@ action_container_env_test(
         "ACCEPT_EULA=Y",
     ],
     target_under_test = ":action_container_env",
+)
+
+# The example passes its generated config with {input:NAME}, read from the
+# expanded target as in the image pin test, and that resolves to the generated
+# config.
+sh_test(
+    name = "example_config_placeholder_test",
+    srcs = ["example_config_placeholder_test.sh"],
+    args = ["$(location :example_scene_based_sdg_query)"],
+    data = [":example_scene_based_sdg_query"],
+)
+
+example_config_resolves_test(
+    name = "example_config_resolves_test",
+    target_under_test = "//examples/isaac_sim:scene_based_sdg",
 )

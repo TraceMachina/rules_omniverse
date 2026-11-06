@@ -24,6 +24,7 @@ from launcher_testing import NO_REPORT, PARTIAL_OUTPUT, LauncherTestCase, fake_i
 IMAGE_LAYOUT = fake_isaacsim("FAKE_ISAACSIM")
 PACKAGE_LAYOUT = fake_isaacsim("FAKE_ISAACSIM_PACKAGE")
 FAKE_KIT = os.path.dirname(os.path.abspath(os.environ["FAKE_KIT"]))
+WRAPPER = os.path.abspath(os.environ["EXAMPLE_WRAPPER"])
 
 
 class KitTestCase(LauncherTestCase):
@@ -553,6 +554,105 @@ class WithoutIsaacSimTest(KitTestCase):
                     self.assertReported(result, status)
                     if status == 0:
                         self.assertEqual(result.stderr, "", "the launcher printed something")
+
+
+# The image's sample, which the example wrapper names once.
+IMAGE_SAMPLE = "/isaac-sim/standalone_examples/replicator/scene_based_sdg/scene_based_sdg.py"
+
+# Stub of NVIDIA's sample: takes --config and --headless, records how it was
+# run, writes 5 frames next to its config, then crashes or closes as the
+# config's `mode` says.
+STUB_SAMPLE = """\
+import json, os, sys
+from isaacsim import SimulationApp
+
+config = sys.argv[sys.argv.index("--config") + 1]
+with open(config) as f:
+    mode = f.read().split(":", 1)[1].strip()
+app = SimulationApp({"headless": "--headless" in sys.argv})
+here = os.path.dirname(config)
+with open(os.path.join(here, "sample.ran"), "w") as f:
+    json.dump({"name": __name__, "file": __file__, "argv": sys.argv, "path0": sys.path[0]}, f)
+out = os.path.join(here, "out")
+os.makedirs(out, exist_ok=True)
+for frame in range(5):
+    with open(os.path.join(out, "rgb_%04d.png" % frame), "w") as f:
+        f.write("frame %d" % frame)
+if mode == "crash":
+    raise RuntimeError("stub sample crashed at frame 5 of 10")
+app.close()
+"""
+
+
+class ExampleWrapperTest(KitTestCase):
+    """The example wrapper runs NVIDIA's sample in its own process.
+
+    The launcher's completion report comes from the script's process. A
+    wrapper that handed off to the sample with os.execv would replace that
+    process, and a crashed sample would exit 0.
+    These tests run a copy of the wrapper, as the script, whose sample path
+    names a stub sample instead of the image's.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.sample = os.path.join(self.root, "isaac-sim", "standalone_examples", "scene_based_sdg.py")
+        os.makedirs(os.path.dirname(self.sample))
+        with open(self.sample, "w") as f:
+            f.write(STUB_SAMPLE)
+
+        # The wrapper names the image's sample path once; the copy names the stub.
+        with open(WRAPPER) as f:
+            source = f.read()
+        self.assertEqual(source.count(IMAGE_SAMPLE), 1, "the wrapper must name %s exactly once" % IMAGE_SAMPLE)
+        self.script = os.path.join(self.root, "run_scene_based_sdg.py")
+        with open(self.script, "w") as f:
+            f.write(source.replace(IMAGE_SAMPLE, self.sample))
+
+        self.config = os.path.join(self.root, "scene_based_sdg.yaml")
+        self.args = ["--config", self.config, "--headless"]
+        self.ran = os.path.join(self.root, "sample.ran")
+
+    def write_config(self, mode):
+        with open(self.config, "w") as f:
+            f.write("mode: %s\n" % mode)
+
+    def sample_saw(self):
+        self.assertTrue(os.path.exists(self.ran), "the wrapper did not run the stub sample")
+        with open(self.ran) as f:
+            return json.load(f)
+
+    # Precondition: the stub sample's crash is hidden like Kit hides it. If
+    # this fails, the stub is broken, not the wrapper.
+    def test_precondition_stub_sample_crash_exits_zero(self):
+        self.write_config("crash")
+        result = self.run_python([self.sample, *self.args])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("stub sample crashed", result.stderr)
+        self.assertEqual(len(self.output_files()), 5)
+
+    def test_sample_crash_fails_through_wrapper(self):
+        self.write_config("crash")
+        result = self.launch(args=self.args)
+        self.sample_saw()
+        # The crash itself is reported, not lost with the process.
+        self.assertReported(result, 1)
+        self.assertEqual(len(self.output_files()), 5, "precondition: the output is not empty")
+
+    def test_sample_finish_succeeds_through_wrapper(self):
+        self.write_config("ok")
+        result = self.launch(args=self.args)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            self.sample_saw(),
+            {
+                "name": "__main__",
+                "file": self.sample,
+                "argv": [self.sample, *self.args],
+                "path0": os.path.dirname(self.sample),
+            },
+        )
+        self.assertEqual(len(self.output_files()), 5)
 
 
 if __name__ == "__main__":

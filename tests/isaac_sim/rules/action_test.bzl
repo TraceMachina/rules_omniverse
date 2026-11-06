@@ -270,3 +270,25 @@ action_rejects_input_placeholder_test = analysistest.make(
     },
     expect_failure = True,
 )
+
+def _example_config_resolves_test_impl(ctx):
+    env = analysistest.begin(ctx)
+    action, _ = _single_action(env)
+    if action:
+        script_args = _script_args(action) or []
+        configs = [script_args[i + 1] for i in range(len(script_args) - 1) if script_args[i] == "--config"]
+        if len(configs) != 1:
+            analysistest.fail(env, "expected one --config in the script arguments: %s" % script_args)
+            return analysistest.end(env)
+        config = configs[0]
+        asserts.true(env, config.startswith(_EXEC_ROOT_TOKEN), "--config %s is not absolute (no execroot token)" % config)
+        generated = [f.path for f in action.inputs.to_list() if not f.is_source and f.basename.endswith(".yaml")]
+        asserts.true(
+            env,
+            _normalize(config) in generated,
+            "--config %s is not a generated .yaml input of the action %s" % (config, generated),
+        )
+    return analysistest.end(env)
+
+# The example's --config is the absolute path of its generated config.
+example_config_resolves_test = analysistest.make(_example_config_resolves_test_impl)

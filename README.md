@@ -195,6 +195,8 @@ isaac_sim_action(
 - **Every local file the scene uses is declared** in `scene` or `assets`. Before the script starts, the launcher computes the scene's dependencies with OpenUSD and fails the action naming every undeclared file, so a missing texture cannot produce a stale cache hit.
 - **The output is the `<name>_out` directory.** `{output}` is replaced by its path, and `{input:NAME}` by the path of the declared input named `NAME`. The action fails when the script raises or exits non-zero, even though Kit exits 0, and when the output is empty.
 
+See [`examples/isaac_sim`](examples/isaac_sim/README.md) for prerequisites, worker setup, running NVIDIA's `scene_based_sdg` sample, troubleshooting and limits.
+
 ## Rules reference
 
 ### Omniverse and packaging
@@ -298,7 +300,7 @@ We prefer to state limits explicitly rather than let you discover them:
 - Standalone NVIDIA libraries must be installed in the selected worker runtime.
 - Referenced USD dependencies must be declared explicitly for correct caching.
 - An `isaac_sim_action` script must run in the launcher's process and must not exec into another program (`os.execv` and friends); the run then fails with `no completion report`. Errors Kit catches and only logs, and exceptions the script catches itself, are not detected.
-- Local `isaac_sim_action` runs mount whole source folders read-only, so a script can read undeclared files that are not in the cache key. Online content and the worker's cache mounts are not in the cache key either.
+- Local `isaac_sim_action` runs mount whole source folders read-only, so a script can read undeclared files that are not in the cache key. Online content and the worker's cache mounts are not in the cache key either. See the [Isaac Sim limits](examples/isaac_sim/README.md#limits).
 - Streaming services and mutable search endpoints are runtime orchestration, not hermetic cacheable transformations.
 
 ## Contributing

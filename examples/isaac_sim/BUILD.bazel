@@ -1,0 +1,45 @@
+load("//omniverse:defs.bzl", "isaac_sim_action", "isaac_sim_platform")
+
+package(default_visibility = ["//visibility:public"])
+
+isaac_sim_platform(
+    name = "isaac_sim_l40s_linux_x86_64",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+    ],
+    driver = "595.99.02",
+    gpu_model = "L40S",
+)
+
+# The sample joins a relative backend_params.output_dir onto its working
+# directory, the execution root, and reads paths only from its config, so the
+# config is written at build time.
+genrule(
+    name = "scene_based_sdg_config",
+    outs = ["scene_based_sdg.yaml"],
+    cmd = "printf 'num_frames: 10\\nbackend_params:\\n  output_dir: $(RULEDIR)/scene_based_sdg_out\\n' > $@",
+)
+
+# NVIDIA's scene_based_sdg sample from the pinned image. Needs a registered
+# Isaac Sim GPU worker.
+isaac_sim_action(
+    name = "scene_based_sdg",
+    arguments = [
+        "--config",
+        "{input:scene_based_sdg.yaml}",
+        "--headless",
+    ],
+    data = [":scene_based_sdg_config"],
+    gpu_model = "L40S",
+    # Must match isaac_sim.pin.
+    image = "nvcr.io/nvidia/isaac-sim:6.2.0.1@sha256:72d85e83fe76ac0dbe3cf6e77523c9ee9664db02c2e0fc92be35ee3c16cf3402",
+    script = "run_scene_based_sdg.py",
+    tags = ["manual"],
+)
+
+exports_files([
+    "README.md",
+    "isaac_sim.pin",
+    "run_scene_based_sdg.py",
+])
