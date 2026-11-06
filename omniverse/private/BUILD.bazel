@@ -13,6 +13,8 @@ exports_files([
     "common.bzl",
     "container_gpu_runner.sh",
     "extension.bzl",
+    "isaac_sim.bzl",
+    "isaac_sim_launcher.py",
     "kit_app.bzl",
     "repo_publish.bzl",
     "repositories.bzl",

@@ -1,0 +1,13 @@
+#usda 1.0
+
+over "World"
+{
+    def Material "Checker"
+    {
+        def Shader "Texture"
+        {
+            uniform token info:id = "UsdUVTexture"
+            asset inputs:file = @./textures/checker.png@
+        }
+    }
+}

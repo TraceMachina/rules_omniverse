@@ -1,0 +1,5 @@
+# Test-only: the launcher's dependency-check test uses OpenUSD's pip package.
+usd-core==26.11 \
+    --hash=sha256:3480fa1b68e421185a18b1651226077549e7b7047c83a7930006e83b2efd7275 \
+    --hash=sha256:39ed21e43b0d2624b354e3703da957d8689b1e5e186817723f432fd56e3a1781 \
+    --hash=sha256:934edc9e11f276e93a45f5cca08fc6fb8f66d94c78ca788975cc62e7fd8b562e
