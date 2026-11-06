@@ -1,7 +1,7 @@
-package(default_visibility = ["//visibility:public"])
-
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("//omniverse:defs.bzl", "omni_worker_script")
+
+package(default_visibility = ["//visibility:public"])
 
 sh_binary(
     name = "assert_manifest",
