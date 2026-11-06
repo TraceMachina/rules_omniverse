@@ -64,15 +64,19 @@ py_test(
 )
 
 # How the launcher runs the script and learns how it ended: exit status, the
-# wrapper file and close() reports. fake_isaacsim/ is a
+# wrapper file, close() reports and the example wrapper. fake_isaacsim/ is a
 # stub of Isaac Sim's isaacsim package whose SimulationApp (kit/fake_kit.py)
 # ends its process like Kit. image/ lays the package out as in the image;
 # package/ is a second layout, which the close() tests also run with.
 py_test(
     name = "isaac_sim_launcher_script_test",
     srcs = ["isaac_sim_launcher_script_test.py"],
-    data = [_LAUNCHER] + glob(["fake_isaacsim/**/*.py"]),
+    data = [
+        _LAUNCHER,
+        "//examples/isaac_sim:run_scene_based_sdg.py",
+    ] + glob(["fake_isaacsim/**/*.py"]),
     env = _LAUNCHER_ENV | {
+        "EXAMPLE_WRAPPER": "$(rootpath //examples/isaac_sim:run_scene_based_sdg.py)",
         "FAKE_ISAACSIM": "$(rootpath fake_isaacsim/image/isaacsim/__init__.py)",
         "FAKE_ISAACSIM_PACKAGE": "$(rootpath fake_isaacsim/package/isaacsim/__init__.py)",
         "FAKE_KIT": "$(rootpath fake_isaacsim/kit/fake_kit.py)",
