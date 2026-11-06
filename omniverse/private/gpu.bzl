@@ -4,7 +4,9 @@ load("//omniverse:providers.bzl", "OmniGpuActionInfo")
 
 _GPU_EXEC_GROUP = "omniverse_gpu"
 _NVIDIA_GPU_CONSTRAINT = Label("//omniverse/constraints:nvidia_gpu")
-_EXEC_ROOT_TOKEN = "__RULES_OMNIVERSE_EXEC_ROOT__"
+
+# Replaced by the container runner with the absolute execution root.
+EXEC_ROOT_TOKEN = "__RULES_OMNIVERSE_EXEC_ROOT__"
 
 def _omni_worker_script_impl(ctx):
     executable = ctx.actions.declare_file(ctx.label.name)
@@ -167,35 +169,78 @@ _omni_gpu_action = rule(
     },
 )
 
-def _omni_container_gpu_action_impl(ctx):
-    inputs = ctx.files.srcs + ctx.files.data
-    _, tree_outputs, outputs = _declare_outputs(ctx)
-    runner = ctx.attr.runner[DefaultInfo].files_to_run
+def run_container_gpu_action(
+        ctx,
+        runner,
+        image,
+        gpu_count,
+        arguments,
+        inputs,
+        outputs,
+        mnemonic,
+        progress_message,
+        container_runtime = "docker",
+        shm_size = "64g",
+        network = "none",
+        entrypoint = "",
+        container_env = {},
+        forward_worker_env = [],
+        runner_flags = [],
+        execution_requirements = {}):
+    """Registers one action that runs an OCI image through the container runner on the GPU exec group.
+
+    The calling rule must declare CONTAINER_GPU_EXEC_GROUPS and a runner attribute
+    built like CONTAINER_GPU_RUNNER_ATTR. Arguments and environment values are
+    passed through as given; expand placeholders before calling. runner_flags are
+    extra runner options, added before the --.
+    """
     args = ctx.actions.args()
-    args.add("--runtime", ctx.attr.container_runtime)
-    args.add("--image", ctx.attr.image)
-    args.add("--gpu-count", ctx.attr.gpu_count)
-    args.add("--shm-size", ctx.attr.shm_size)
-    args.add("--network", ctx.attr.network)
-    if ctx.attr.entrypoint:
-        args.add("--entrypoint", ctx.attr.entrypoint)
-    for name, value in sorted(_expand_environment(ctx.attr.container_env, ctx.files.srcs, outputs, execroot = _EXEC_ROOT_TOKEN).items()):
+    args.add("--runtime", container_runtime)
+    args.add("--image", image)
+    args.add("--gpu-count", gpu_count)
+    args.add("--shm-size", shm_size)
+    args.add("--network", network)
+    if entrypoint:
+        args.add("--entrypoint", entrypoint)
+    for name, value in sorted(container_env.items()):
         args.add("--env", "%s=%s" % (name, value))
-    for name in sorted(ctx.attr.forward_worker_env):
+    for name in sorted(forward_worker_env):
         args.add("--forward-env", name)
+    args.add_all(runner_flags)
     args.add("--")
-    args.add_all(_expand_arguments(ctx.attr.arguments, ctx.files.srcs, outputs, execroot = _EXEC_ROOT_TOKEN))
+    args.add_all(arguments)
 
     ctx.actions.run(
         executable = runner,
         arguments = [args],
         exec_group = _GPU_EXEC_GROUP,
-        execution_requirements = ctx.attr.execution_requirements,
+        execution_requirements = execution_requirements,
         inputs = depset(inputs),
-        mnemonic = ctx.attr.mnemonic,
+        mnemonic = mnemonic,
         outputs = outputs,
-        progress_message = ctx.attr.progress_message or "Running containerized GPU action %{label}",
+        progress_message = progress_message,
         tools = [runner],
+    )
+
+def _omni_container_gpu_action_impl(ctx):
+    _, tree_outputs, outputs = _declare_outputs(ctx)
+    run_container_gpu_action(
+        ctx,
+        runner = ctx.attr.runner[DefaultInfo].files_to_run,
+        container_runtime = ctx.attr.container_runtime,
+        image = ctx.attr.image,
+        gpu_count = ctx.attr.gpu_count,
+        shm_size = ctx.attr.shm_size,
+        network = ctx.attr.network,
+        entrypoint = ctx.attr.entrypoint,
+        container_env = _expand_environment(ctx.attr.container_env, ctx.files.srcs, outputs, execroot = EXEC_ROOT_TOKEN),
+        forward_worker_env = ctx.attr.forward_worker_env,
+        arguments = _expand_arguments(ctx.attr.arguments, ctx.files.srcs, outputs, execroot = EXEC_ROOT_TOKEN),
+        inputs = ctx.files.srcs + ctx.files.data,
+        outputs = outputs,
+        mnemonic = ctx.attr.mnemonic,
+        progress_message = ctx.attr.progress_message or "Running containerized GPU action %{label}",
+        execution_requirements = ctx.attr.execution_requirements,
     )
 
     output_set = depset(outputs)
@@ -208,16 +253,27 @@ def _omni_container_gpu_action_impl(ctx):
         ),
     ]
 
+CONTAINER_GPU_EXEC_GROUPS = {
+    _GPU_EXEC_GROUP: exec_group(
+        exec_compatible_with = [
+            "//omniverse/constraints:nvidia_gpu",
+            "//omniverse/constraints:oci_container_runtime",
+        ],
+    ),
+}
+
+CONTAINER_GPU_RUNNER_ATTR = attr.label(
+    cfg = config.exec(_GPU_EXEC_GROUP),
+    default = Label("//omniverse/private:container_gpu_runner"),
+    doc = "Worker-side wrapper that launches the selected OCI runtime.",
+    executable = True,
+)
+
 _omni_container_gpu_action = rule(
     implementation = _omni_container_gpu_action_impl,
     attrs = {
         "gpu_count": attr.int(mandatory = True),
-        "runner": attr.label(
-            cfg = config.exec(_GPU_EXEC_GROUP),
-            default = Label("//omniverse/private:container_gpu_runner"),
-            doc = "Worker-side wrapper that launches the selected OCI runtime.",
-            executable = True,
-        ),
+        "runner": CONTAINER_GPU_RUNNER_ATTR,
         "arguments": attr.string_list(
             doc = "Image entrypoint arguments with the same placeholders as omni_gpu_action.",
         ),
@@ -272,17 +328,10 @@ _omni_container_gpu_action = rule(
         ),
     },
     doc = "Runs a caller-selected OCI image on a registered NVIDIA GPU execution platform.",
-    exec_groups = {
-        _GPU_EXEC_GROUP: exec_group(
-            exec_compatible_with = [
-                "//omniverse/constraints:nvidia_gpu",
-                "//omniverse/constraints:oci_container_runtime",
-            ],
-        ),
-    },
+    exec_groups = CONTAINER_GPU_EXEC_GROUPS,
 )
 
-def _gpu_exec_properties(exec_properties, gpu_count, gpu_model):
+def gpu_exec_properties(exec_properties, gpu_count, gpu_model):
     if gpu_count < 1:
         fail("gpu_count must be at least 1")
 
@@ -304,7 +353,7 @@ def omni_gpu_action(name, gpu_count = 1, gpu_model = "", exec_properties = None,
     """
     _omni_gpu_action(
         name = name,
-        exec_properties = _gpu_exec_properties(exec_properties, gpu_count, gpu_model),
+        exec_properties = gpu_exec_properties(exec_properties, gpu_count, gpu_model),
         **kwargs
     )
 
@@ -322,7 +371,7 @@ def omni_container_gpu_action(
     values must be injected by the worker and named with forward_worker_env;
     never place secret values in container_env.
     """
-    properties = _gpu_exec_properties(exec_properties, gpu_count, gpu_model)
+    properties = gpu_exec_properties(exec_properties, gpu_count, gpu_model)
     _omni_container_gpu_action(
         name = name,
         exec_properties = properties,
