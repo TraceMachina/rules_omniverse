@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+)
+
+def Xform "World" {
+    def Xform "Robot" {
+        custom double[] waypointX = [0.0, 1.0, 2.0]
+        custom double[] waypointY = [0.0, 0.0, 0.0]
+    }
+
+    def Xform "Obstacle" {
+        custom double obstacleX = 1.0
+        custom double obstacleY = 1.0
+        custom double obstacleRadius = 0.25
+    }
+}
