@@ -1,0 +1,51 @@
+load("@rules_python//python:py_test.bzl", "py_test")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//omniverse:defs.bzl", "omni_usd_validate", "omni_worker_script")
+
+package(default_visibility = ["//visibility:public"])
+
+omni_worker_script(
+    name = "trajectory_checker",
+    src = "trajectory_checker.py",
+)
+
+omni_usd_validate(
+    name = "trajectory_report",
+    src = "scenario.usda",
+    tool = ":trajectory_checker",
+)
+
+sh_test(
+    name = "trajectory_report_test",
+    srcs = ["//tests:assert_contains.sh"],
+    args = [
+        "$(location :trajectory_report)",
+        "'\"collision_indices\": []'",
+        "'\"obstacle_radius\": 0.25'",
+        "'\"valid\": true'",
+        "'\"waypoint_count\": 3'",
+    ],
+    data = [":trajectory_report"],
+)
+
+py_test(
+    name = "trajectory_checker_test",
+    srcs = [
+        "trajectory_checker.py",
+        "trajectory_checker_test.py",
+    ],
+    data = ["scenario.usda"],
+    imports = ["."],
+    main = "trajectory_checker_test.py",
+)
+
+exports_files([
+    "Dockerfile",
+    "NATIVELINK_LICENSE",
+    "README.md",
+    "nativelink.json5",
+    "run_cache_demo.py",
+    "run_nativelink_demo.py",
+    "scenario.usda",
+    "trajectory_checker.py",
+])

@@ -263,6 +263,8 @@ New to remote execution? Start here:
 
 See [`examples/nativelink/gpu`](examples/nativelink/gpu/README.md) for worker configuration, platforms, and real-versus-fake hardware preflight, including an H200 `.bazelrc` example and a hardware preflight script.
 
+For a CPU-only starting point, see [`examples/nativelink/trajectory`](examples/nativelink/trajectory/README.md). It uses a small waypoint checker to demonstrate remote execution, cache reuse, and invalidation when a declared input changes, without an NVIDIA SDK or GPU.
+
 ## Testing
 
 The `fake_gpu` fixtures under `//tests` and `//e2e/bzlmod` verify Starlark analysis, constraints, arguments, declared artifacts, and external-module use without reserving a GPU. They do not claim CUDA or SDK execution.
