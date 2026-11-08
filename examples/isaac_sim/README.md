@@ -137,7 +137,29 @@ actions run again; until the BUILD file is updated they fail with
 | `image must be pinned by digest (contain @sha256:)` | Use `name:tag@sha256:...`; `docker inspect --format '{{index .RepoDigests 0}}' IMAGE` prints it. |
 | `{input:NAME} matches no file of script, scene, assets or data` | Declare the file, or fix `NAME`, a basename. |
 | `{input:NAME} is ambiguous` | Two declared files have that basename. Rename one. |
-| `fchmod ... Operation not permitted` from `bazel clean` or a rebuild | A cancelled local build left its container running and its output owned by uid 1234 (see [Limits](#limits)). Find the container with `docker ps --filter ancestor=nvcr.io/nvidia/isaac-sim@sha256:72d85e83fe76ac0dbe3cf6e77523c9ee9664db02c2e0fc92be35ee3c16cf3402` (the digest in `isaac_sim.pin`) and stop it with `docker kill <id>`. Then, in the workspace, run `sudo chown -R "$(id -u):$(id -g)" "$(bazel info output_base)"`. |
+| `fchmod ... Operation not permitted` from `bazel clean` or a rebuild | Output ownership cleanup was interrupted, failed or exceeded Bazel's grace period (see [Cancelling local builds](#cancelling-local-builds)). Find the container with `docker ps --filter ancestor=nvcr.io/nvidia/isaac-sim@sha256:72d85e83fe76ac0dbe3cf6e77523c9ee9664db02c2e0fc92be35ee3c16cf3402` (the digest in `isaac_sim.pin`) and stop it with `docker kill <id>`. Then, in the workspace, run `sudo chown -R "$(id -u):$(id -g)" "$(bazel info output_base)"`. |
+
+## Cancelling local builds
+
+`isaac_sim_action` requests `supports-graceful-termination` from Bazel. On
+ordinary local cancellation, this lets the runner receive SIGTERM, kill its
+Docker container and restore output ownership before exiting. Without this
+requirement, Bazel can kill the runner before its cleanup traps run
+([issue #13](https://github.com/TraceMachina/rules_omniverse/issues/13)).
+If the ID has been written but the container has not started, `docker kill`
+cannot stop it; the runner falls back to `docker rm -f` for that same ID.
+
+Cleanup must finish within Bazel's `--local_termination_grace_seconds` period
+(15 seconds by default in Bazel 8.4.2). Forced SIGKILL, a host/daemon failure,
+or cleanup taking longer can still leave a container or incorrectly owned
+output; the recovery above remains available.
+
+The [cancellation regression](../../e2e/cancellation/README.md) exercises actual
+Bazel cancellation with fake Docker and, optionally, real CPU containers on
+Linux. It verifies four controlled boundaries around creation, startup and
+output, followed by a complete rebuild and clean. A create request still in
+flight before its ID is available is not covered. These checks do not
+constitute a GPU or Isaac Sim verification of the fix.
 
 ## Limits
 
@@ -146,13 +168,9 @@ actions run again; until the BUILD file is updated they fail with
   the `except` block, which counts as a failure.
 - The success report is sent before `close()` flushes Replicator's writers,
   so an error Kit only logs during that flush is missed.
-- Cancelling a local build (Ctrl-C, or Bazel stopping it after another
-  action fails) leaves the Isaac Sim container running until its script ends,
-  and its output owned by uid 1234, so the next `bazel clean` or rebuild fails
-  with `fchmod ... Operation not permitted`. See
-  [Troubleshooting](#troubleshooting) to recover, and the
-  [upstream issue](https://github.com/TraceMachina/rules_omniverse/issues/13)
-  for status. Remote builds through NativeLink are not affected.
+- Local cancellation cleanup depends on Bazel allowing graceful termination
+  and Docker remaining available. Forced termination and cleanup timeouts
+  still require manual recovery; see [Cancelling local builds](#cancelling-local-builds).
 - Local runs mount whole source folders read-only, so a script can read
   undeclared files that are not in the cache key.
 - The sample loads its scene from NVIDIA's online assets (`network = "host"`).

@@ -103,6 +103,10 @@ case "$command" in
     exit "$status"
     ;;
   kill)
+    if [[ "${FAKE_CREATED_ONLY:-0}" == 1 ]]; then
+      echo "Error response from daemon: container is not running" >&2
+      exit 1
+    fi
     signal=KILL
     ids=()
     while [[ $# -gt 0 ]]; do
@@ -125,6 +129,15 @@ case "$command" in
       fi
     done
     exit "$status"
+    ;;
+  rm)
+    # A created container cannot be killed, but rm -f must release it. The
+    # sleep is only the fake daemon's state, not a running container workload.
+    [[ "$1" == -f && $# == 2 ]] || exit 2
+    id="$2"
+    [[ -f "$state/containers/$id" ]] || exit 1
+    kill -KILL "$(cat "$state/containers/$id")" 2>/dev/null || true
+    exit 0
     ;;
   stop)
     grace=10

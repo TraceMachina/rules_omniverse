@@ -27,6 +27,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
     "input_mounts",  # targets of symlinked inputs are mounted
     "unresolvable_input",  # a symlinked input whose directory cannot be resolved fails
     "signal",  # SIGTERM or SIGINT kills the container, then hands the output back
+    "created",  # cancellation removes a container created but not yet started
 ]]
 
 py_library(

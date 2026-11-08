@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The expanded isaac_sim_action rule carries the expected
-# execution_requirements (no-sandbox, plus any the caller gave). $1 is the
+# execution_requirements (the defaults plus any the caller gave). $1 is the
 # genquery --output=build dump of the target; the rest are KEY=VALUE pairs.
 set -euo pipefail
 

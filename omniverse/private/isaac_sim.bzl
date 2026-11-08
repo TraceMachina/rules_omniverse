@@ -153,7 +153,7 @@ _isaac_sim_action = rule(
             doc = "Additional action inputs, such as script configuration, not passed on the command line.",
         ),
         "execution_requirements": attr.string_dict(
-            doc = "Bazel execution requirements; the macro always includes no-sandbox.",
+            doc = "Bazel execution requirements; the macro always includes no-sandbox and supports-graceful-termination.",
         ),
         "forward_worker_env": attr.string_list(
             doc = "Names of worker-injected variables forwarded without recording their values in the action.",
@@ -230,10 +230,16 @@ def isaac_sim_action(
       exec_properties: Additional Bazel execution properties.
       execution_requirements: Additional Bazel execution requirements, such as no-local. no-sandbox
         is always set, because sandboxed inputs are symlinks the container cannot follow.
+        supports-graceful-termination is always set so local cancellation can stop the container
+        and restore output ownership before Bazel kills the runner.
       **kwargs: Remaining attributes, such as tags, network or shm_size.
     """
     requirements = dict(execution_requirements)
     requirements["no-sandbox"] = "1"
+
+    # The runner must survive long enough to kill its Docker container and
+    # give the output back. Without this, local cancellation skips its traps.
+    requirements["supports-graceful-termination"] = "1"
     _isaac_sim_action(
         name = name,
         assets = assets,

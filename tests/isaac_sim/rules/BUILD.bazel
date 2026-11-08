@@ -250,7 +250,8 @@ action_runner_flag_test(
     target_under_test = ":action_minimal",
 )
 
-# no-sandbox by default, so local runs see real input files. Starlark cannot
+# no-sandbox by default, so local runs see real input files, and graceful
+# termination so the runner can clean up on local cancellation. Starlark cannot
 # read an action's execution requirements, so like the platform tests this
 # reads the expanded rule's execution_requirements attribute with genquery.
 genquery(
@@ -266,11 +267,12 @@ sh_test(
     args = [
         "$(location :action_minimal_query)",
         "no-sandbox=1",
+        "supports-graceful-termination=1",
     ],
     data = [":action_minimal_query"],
 )
 
-# A caller's execution_requirements are added to no-sandbox.
+# A caller's execution_requirements are preserved alongside both defaults.
 isaac_sim_action(
     name = "action_with_requirements",
     execution_requirements = {"no-local": "1"},
@@ -294,6 +296,7 @@ sh_test(
         "$(location :action_with_requirements_query)",
         "no-sandbox=1",
         "no-local=1",
+        "supports-graceful-termination=1",
     ],
     data = [":action_with_requirements_query"],
 )
