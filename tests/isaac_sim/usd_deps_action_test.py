@@ -10,6 +10,7 @@ usd-core and the stub Isaac Sim in fake_isaacsim/.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import unittest
 
@@ -61,7 +62,12 @@ class UsdDepsActionTest(LauncherTestCase):
         shutil.copytree(PACKAGE_DIR, copy)
         generated = os.path.join(copy, "stage_deps.bzl")
         os.remove(generated)
-        result = self.run_python([USD_DEPS, os.path.join(copy, "stage.usda")])
+        env = dict(os.environ)
+        env.pop("PYTHONPATH", None)
+        env.pop("PYTHONSAFEPATH", None)
+        result = subprocess.run(
+            [USD_DEPS, os.path.join(copy, "stage.usda")], capture_output=True, text=True, env=env, timeout=60
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         with open(generated) as f:
             return f.read()

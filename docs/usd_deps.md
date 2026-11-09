@@ -38,14 +38,29 @@ When the scene changes, run the tool again. In CI, run it with `--check`.
 
 ## Requirements
 
-The tool runs with the `python3` on `PATH`, which must be able to import `pxr`,
-for example from `pip install usd-core` in a virtual environment. usd-core 26.11
-needs Python 3.11 or newer. If `pxr` cannot be imported, the tool exits non-zero
-with a one-line message naming `usd-core`, not a traceback. `--help` works without `pxr`.
+None to set up. Bazel supplies the interpreter and usd-core, and the `python3`
+on `PATH` is never started: it can be any version, broken, or absent.
 
-`//tools:usd_deps` is an `sh_binary` like the other tools in that package.
-`tools/BUILD.bazel` must not load a repository that is a `dev_dependency`, such
-as `@isaac_sim_test_pip`, because consumers of the module do not have it.
+- `//tools:usd_deps` runs a rules_python `py_binary` on the Python 3.11
+  toolchain, with usd-core 26.11 (which needs Python 3.11 or newer) from the pip
+  hub `rules_omniverse_usd_deps_pip`. Its lock file,
+  `tools/usd_deps_requirements_lock.txt`, pins usd-core and nothing else.
+- The binary pins the Python version it needs (`python_version = "3.11"`) and the
+  module registers that toolchain, so a consumer whose root module has a
+  different default Python still runs the tool on 3.11.
+- rules_python's default start-up script begins with `#!/usr/bin/env python3`, so
+  a plain `py_binary` needs a working `python3` on `PATH` before Bazel's
+  interpreter takes over. The target therefore uses rules_python's shell start-up
+  (`bootstrap_impl = script`), set by the target itself. Consumers add no flag.
+- `rules_python`, the Python 3.11 toolchain and that pip hub are real
+  (non-dev) dependencies of the module, and nothing else new is.
+  `@isaac_sim_test_pip` and `bazel_skylib` stay `dev_dependency`.
+  `tools/BUILD.bazel` must not load a repository that is a `dev_dependency`,
+  because consumers of the module do not have it.
+
+`--help` works without importing `pxr`. If `pxr` cannot be imported, for example
+because of a broken wheel, the tool exits non-zero with a one-line message naming
+`usd-core`, not a traceback.
 
 ## Scene arguments
 

@@ -1,18 +1,17 @@
 """tools/usd_deps.py: what it lists, where it writes, and when it fails.
 
 Each test builds a temporary workspace holding one package, pkg/, runs
-//tools:usd_deps on it with this test's usd-core, and reads what it wrote. The
-contract is docs/usd_deps.md.
+//tools:usd_deps on it, and reads what it wrote. The contract is docs/usd_deps.md.
 
-The launcher is deliberately not in this test's data, so the tool has to find
-everything it needs in the runfiles of //tools:usd_deps.
+This test's own usd-core is only for the precondition. The tool runs with no
+PYTHONPATH, and the launcher is deliberately not in this test's data, so it has
+to find its interpreter, usd-core and the launcher in its own runfiles.
 """
 
 import os
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import textwrap
 import unittest
@@ -86,15 +85,15 @@ class UsdDepsTestCase(unittest.TestCase):
 
     def environ(self):
         env = dict(os.environ)
-        # Let the tool import pxr from this test's deps. `bazel run` sets
-        # neither PYTHONSAFEPATH nor BUILD_* for a test, so a test sets BUILD_* itself.
-        env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+        # What this test's own bootstrap set up must not reach the tool. A test
+        # does not get BUILD_* as `bazel run` does, so a test sets them itself.
+        env.pop("PYTHONPATH", None)
         env.pop("PYTHONSAFEPATH", None)
         return env
 
     def run_tool(self, *args, cwd=None, env=None):
         return subprocess.run(
-            [sys.executable, USD_DEPS, *args],
+            [USD_DEPS, *args],
             capture_output=True,
             text=True,
             cwd=cwd or self.workspace,
@@ -133,6 +132,25 @@ class UsdDepsTestCase(unittest.TestCase):
         output = tool_output(result)
         for name in names:
             self.assertIn(name, output)
+
+
+class BazelSuppliesPythonTest(UsdDepsTestCase):
+    def test_python3_on_path_is_never_started(self):
+        started = os.path.join(self.workspace, "python3_started")
+        bin_dir = os.path.join(self.workspace, "bin")
+        os.makedirs(bin_dir)
+        shim = os.path.join(bin_dir, "python3")
+        with open(shim, "w") as f:
+            f.write('#!/bin/sh\necho started > "%s"\nexit 97\n' % started)
+        os.chmod(shim, 0o755)
+        self.write("wood.png")
+        self.write("stage.usda", layer(texture("./wood.png")))
+        env = self.environ()
+        env["PATH"] = bin_dir + os.pathsep + env["PATH"]
+        result = self.run_tool(self.scene, env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.generated(), ["wood.png"])
+        self.assertFalse(os.path.exists(started), "the python3 on PATH was started")
 
 
 class WhatIsListedTest(UsdDepsTestCase):

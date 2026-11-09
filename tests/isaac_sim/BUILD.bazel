@@ -91,7 +91,8 @@ _USD_DEPS = "//tools:usd_deps"
 
 _USD_DEPS_ENV = {"USD_DEPS": "$(rootpath %s)" % _USD_DEPS}
 
-# What it lists, where it writes and when it fails, with OpenUSD's usd-core.
+# What it lists, where it writes and when it fails, on the interpreter and
+# usd-core the binary brings. This test's usd-core is only for its precondition.
 # The launcher is left out of data so the tool's own runfiles must be enough.
 py_test(
     name = "usd_deps_test",
@@ -102,7 +103,8 @@ py_test(
 )
 
 # The tool and the launcher read the same stubbed USD answer the same way. No
-# usd-core here: the only pxr is the stub, and the no-pxr test needs none at all.
+# usd-core here, so the launcher's only pxr is the stub. The tool's own usd-core
+# is in its runfiles, behind the stub on PYTHONPATH.
 py_test(
     name = "usd_deps_resolution_test",
     srcs = ["usd_deps_resolution_test.py"],

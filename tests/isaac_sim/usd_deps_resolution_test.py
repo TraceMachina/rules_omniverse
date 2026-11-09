@@ -2,13 +2,13 @@
 
 A stub pxr.UsdUtils returns a chosen answer, so both programs can be given
 cases usd-core does not produce on its own, and the same answer goes to each.
-This target does not depend on usd-core, so no other pxr is importable.
+The stub is first on PYTHONPATH, which comes before the usd-core in the tool's
+runfiles. This target does not depend on usd-core, so the launcher has no other pxr.
 """
 
 import json
 import os
 import subprocess
-import sys
 import textwrap
 import unittest
 
@@ -67,6 +67,9 @@ class ResolutionTestCase(LauncherTestCase):
         env.pop("PYTHONSAFEPATH", None)
         return env
 
+    def run_tool(self, *args):
+        return subprocess.run([USD_DEPS, *args], capture_output=True, text=True, env=self.environ(), timeout=60)
+
     def answer(self, layers=(), assets=(), unresolved=()):
         with open(self.answer_file, "w") as f:
             json.dump(
@@ -88,7 +91,7 @@ class ResolutionTestCase(LauncherTestCase):
 class SameResolutionTest(ResolutionTestCase):
     def assertBothAccept(self, listed, warned=()):
         """The tool lists exactly listed, and the launcher accepts that list, both warning about warned."""
-        tool = self.run_python([USD_DEPS, self.scene])
+        tool = self.run_tool(self.scene)
         self.assertEqual(tool.returncode, 0, tool.stderr)
         self.assertEqual(self.generated(), listed)
         launcher = self.launch(self.scene, [os.path.join(self.package, path) for path in listed], [])
@@ -99,7 +102,7 @@ class SameResolutionTest(ResolutionTestCase):
             self.assertIn(path, launcher.stderr)
 
     def assertBothReject(self, *names):
-        tool = self.run_python([USD_DEPS, self.scene])
+        tool = self.run_tool(self.scene)
         self.assertNotEqual(tool.returncode, 0, tool.stderr)
         launcher = self.launch(self.scene, [], [])
         self.assertNotEqual(launcher.returncode, 0, launcher.stderr)
@@ -147,44 +150,21 @@ class SameResolutionTest(ResolutionTestCase):
         self.assertBothReject(path)
 
 
-class RunsAsItsOwnProgramTest(ResolutionTestCase):
-    """How `bazel run` starts the tool: as a program, with the python3 on PATH."""
+class WithoutPxrTest(ResolutionTestCase):
+    """pxr cannot be imported: the first one on PYTHONPATH raises ImportError."""
 
-    def run_program(self, *args, env):
-        return subprocess.run([USD_DEPS, *args], capture_output=True, text=True, env=env, timeout=60)
-
-    def without_pxr(self):
-        env = dict(os.environ)
-        env.pop("PYTHONPATH", None)
-        env.pop("PYTHONSAFEPATH", None)
-        return env
-
-    def test_finds_python3_on_path(self):
-        # A python3 that is this test's interpreter, so the stub pxr can be imported.
-        bin_dir = os.path.join(self.root, "bin")
-        os.makedirs(bin_dir)
-        shim = os.path.join(bin_dir, "python3")
-        with open(shim, "w") as f:
-            f.write('#!/bin/sh\nexec "%s" "$@"\n' % os.path.realpath(sys.executable))
-        os.chmod(shim, 0o755)
-        self.answer()
-        env = self.environ()
-        env["PATH"] = bin_dir + os.pathsep + env["PATH"]
-        result = self.run_program(self.scene, env=env)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.generated(), [])
+    def setUp(self):
+        super().setUp()
+        with open(os.path.join(self.stub, "pxr", "__init__.py"), "w") as f:
+            f.write('raise ImportError("pxr is unavailable in this test")\n')
 
     def test_help_needs_no_pxr(self):
-        result = self.run_program("--help", env=self.without_pxr())
+        result = self.run_tool("--help")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--check", result.stdout)
 
     def test_without_pxr_says_how_to_get_it(self):
-        env = self.without_pxr()
-        probe = subprocess.run(["python3", "-c", "import pxr"], capture_output=True, env=env)
-        if probe.returncode == 0:
-            self.skipTest("the python3 on PATH has pxr")
-        result = self.run_program(self.scene, env=env)
+        result = self.run_tool(self.scene)
         self.assertNotEqual(result.returncode, 0, result.stderr)
         self.assertIn("usd-core", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
