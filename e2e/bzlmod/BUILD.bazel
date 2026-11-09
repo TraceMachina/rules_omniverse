@@ -4,6 +4,8 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
+exports_files(["MODULE.bazel"])
+
 omni_asset_bundle(
     name = "assets",
     srcs = ["assets/sample.usda"],

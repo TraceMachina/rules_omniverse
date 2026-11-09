@@ -265,6 +265,23 @@ sh_test(
     data = [":gpu_action_result"],
 )
 
+sh_test(
+    name = "version_consistency_test",
+    srcs = ["version_consistency_test.sh"],
+    args = [
+        "$(location //:MODULE.bazel)",
+        "$(location //:CHANGELOG.md)",
+        "$(location //:README.md)",
+        "$(location //e2e/bzlmod:MODULE.bazel)",
+    ],
+    data = [
+        "//:CHANGELOG.md",
+        "//:MODULE.bazel",
+        "//:README.md",
+        "//e2e/bzlmod:MODULE.bazel",
+    ],
+)
+
 exports_files([
     "assert_contains.sh",
     "fake_kit.sh",

@@ -1,5 +1,11 @@
 package(default_visibility = ["//visibility:public"])
 
+exports_files([
+    "CHANGELOG.md",
+    "MODULE.bazel",
+    "README.md",
+])
+
 filegroup(
     name = "metadata",
     srcs = [

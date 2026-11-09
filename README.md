@@ -46,7 +46,7 @@ Nothing is downloaded or bundled on your behalf — the ruleset schedules the to
 Add the ruleset to `MODULE.bazel`:
 
 ```starlark
-bazel_dep(name = "rules_omniverse", version = "0.3.0")
+bazel_dep(name = "rules_omniverse", version = "0.4.0")
 ```
 
 The module brings its internal `rules_shell` and `platforms` dependencies. Consumers do not need to repeat them unless they use those rule sets directly.
