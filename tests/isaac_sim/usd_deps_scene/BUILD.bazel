@@ -1,0 +1,36 @@
+load("//omniverse:defs.bzl", "isaac_sim_action")
+load(":action_argv.bzl", "action_argv")
+load(":stage_deps.bzl", "STAGE_DEPS")
+
+package(default_visibility = ["//tests/isaac_sim:__pkg__"])
+
+# stage_deps.bzl is usd_deps's output for stage.usda, loaded as a user would.
+# //tests/isaac_sim:usd_deps_action_test checks the tool still writes these
+# bytes, then runs the launcher with this action's own arguments.
+isaac_sim_action(
+    name = "generate",
+    assets = STAGE_DEPS,
+    gpu_model = "FAKE_GPU",
+    image = "nvcr.io/nvidia/isaac-sim@sha256:4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c",
+    scene = "stage.usda",
+    script = "generate.py",
+    tags = ["manual"],
+)
+
+# Manual too: the action needs the test configuration's fake GPU platform, which
+# `bazel build //...` does not have.
+action_argv(
+    name = "generate_argv",
+    action = ":generate",
+    tags = ["manual"],
+)
+
+exports_files(
+    ["stage.usda"],
+    visibility = ["//tests/isaac_sim:__pkg__"],
+)
+
+filegroup(
+    name = "package_files",
+    srcs = glob(["**"]),
+)
