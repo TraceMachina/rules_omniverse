@@ -65,22 +65,32 @@ def _real(path: str) -> str | None:
     return os.path.realpath(path)
 
 
-def _check_scene(scene: str, assets: list[str]) -> list[str]:
-    """Returns the scene's undeclared local dependencies, warning about online ones."""
+def scene_dependencies(scene: str) -> tuple[list[str], list[str], list[str]]:
+    """Returns the (local, unresolved, online) paths USD reports for scene, itself included in local.
+
+    tools/usd_deps.py imports this, so the list it generates is the one _check_scene accepts.
+    """
     from pxr import UsdUtils
 
-    layers, resolved_assets, unresolved = UsdUtils.ComputeAllDependencies(scene)
+    layers, resolved_assets, unresolved_paths = UsdUtils.ComputeAllDependencies(scene)
+    resolved = [layer.realPath or layer.identifier for layer in layers] + list(resolved_assets)
+    online = [path for path in resolved + list(unresolved_paths) if _ONLINE.match(path)]
+    local = [path for path in resolved if not _ONLINE.match(path)]
+    unresolved = [path for path in unresolved_paths if not _ONLINE.match(path)]
+    return local, unresolved, online
+
+
+def _check_scene(scene: str, assets: list[str]) -> list[str]:
+    """Returns the scene's undeclared local dependencies, warning about online ones."""
+    local, unresolved, online = scene_dependencies(scene)
     declared = {_real(path) for path in [scene, *assets]} - {None}
 
-    resolved = [layer.realPath or layer.identifier for layer in layers] + list(resolved_assets)
+    for path in online:
+        print("isaac_sim_launcher: warning: online dependency is not checked: %s" % path, file=sys.stderr)
     undeclared = []
-    for path, is_resolved in [(p, True) for p in resolved] + [(p, False) for p in unresolved]:
-        if _ONLINE.match(path):
-            print("isaac_sim_launcher: warning: online dependency is not checked: %s" % path, file=sys.stderr)
-            continue
-        if not is_resolved or _real(path) not in declared:
-            if path not in undeclared:
-                undeclared.append(path)
+    for path in [p for p in local if _real(p) not in declared] + unresolved:
+        if path not in undeclared:
+            undeclared.append(path)
     return undeclared
 
 
