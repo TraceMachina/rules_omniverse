@@ -1,0 +1,10 @@
+#usda 1.0
+
+over "World"
+{
+    def Shader "Wood"
+    {
+        uniform token info:id = "UsdUVTexture"
+        asset inputs:file = @../textures/wood.png@
+    }
+}

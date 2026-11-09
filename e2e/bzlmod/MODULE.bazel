@@ -7,5 +7,13 @@ module(
 bazel_dep(name = "rules_omniverse", version = "0.3.0")
 bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.6.3")
+
+# A default Python other than the one usd_deps pins (usd_deps_outside_user.sh).
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.12",
+)
 
 register_execution_platforms("//:fake_gpu_platform")
