@@ -118,6 +118,20 @@ Then run `bazel --bazelrc=/absolute/path/private-isaac.bazelrc build
 `build:isaac --cpu=k8 --host_cpu=k8`; without both, the client computes a
 different action key than the Linux worker and never gets a cache hit.
 
+## Datasets
+
+`//examples/isaac_sim:scene_based_sdg_dataset` renders the same sample as
+three chunks of 10 frames with seeds 42, 43 and 44. Each chunk is its own
+cached action, and `scene_based_sdg_dataset_chunk_<i>` builds one alone. Raising
+`chunks` renders only the new chunks.
+
+`run_scene_based_sdg.py` accepts `--seed`, `--frames` and `--output_dir`. The
+sample has no such flags: the wrapper changes the sample's two hard-coded seed
+lines when it runs, and gives the sample a copy of the config with `num_frames`
+and `backend_params.output_dir` replaced. It stops if a seed line is not found
+exactly once, for example in a different image. Without these flags the sample
+runs unchanged.
+
 ## Updating the driver
 
 A driver update is a deliberate cache reset. Update the driver on the worker

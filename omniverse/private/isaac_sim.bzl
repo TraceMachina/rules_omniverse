@@ -266,6 +266,79 @@ _isaac_sim_invalid_target = rule(
     doc = "Fails analysis with message; stands in for a target declared with invalid arguments.",
 )
 
+def _is_integer_of_at_least(value, minimum):
+    return type(value) == "int" and value >= minimum
+
+def isaac_sim_dataset(
+        name,
+        chunks,
+        frames_per_chunk,
+        base_seed,
+        arguments = [],
+        frames = None,
+        **kwargs):
+    """Splits one dataset into isaac_sim_action chunks, each cached on its own.
+
+    Declares <name>_chunk_0 to <name>_chunk_<chunks - 1>, and <name>, a filegroup of
+    all of them. Chunk i runs the script with --seed <base_seed + i> and
+    --frames <frames_per_chunk>, so the script must accept both. No action depends on
+    chunks: raising it leaves the existing chunks' cache entries valid.
+
+    Invalid settings fail when <name> is built, not when the package loads.
+
+    Args:
+      name: Name of the filegroup, and prefix of the chunk targets.
+      chunks: Number of chunks, at least 1.
+      frames_per_chunk: Frames each chunk renders, at least 1.
+      base_seed: Seed of the first chunk, zero or more.
+      arguments: Script arguments, as for isaac_sim_action, without --seed. Use {output} to
+        give each chunk its own output directory. A --seed inside a select() is not detected.
+      frames: Not allowed; frames_per_chunk sets it.
+      **kwargs: Remaining isaac_sim_action attributes, such as image, script, data or tags.
+        tags, testonly and visibility also apply to the filegroup.
+    """
+    arguments = arguments or []
+    problems = []
+    if not _is_integer_of_at_least(chunks, 1):
+        problems.append("chunks must be a positive integer, got %r" % (chunks,))
+    if not _is_integer_of_at_least(frames_per_chunk, 1):
+        problems.append("frames_per_chunk must be a positive integer, got %r" % (frames_per_chunk,))
+    if not _is_integer_of_at_least(base_seed, 0):
+        problems.append("base_seed must be zero or a positive integer, got %r" % (base_seed,))
+    if frames != None:
+        problems.append("do not set frames; frames_per_chunk sets it (got frames = %r)" % (frames,))
+    if type(arguments) == "list":
+        for argument in arguments:
+            if argument == "--seed" or argument.startswith("--seed="):
+                problems.append("do not set --seed in arguments; base_seed sets it (got %r)" % (argument,))
+
+    group_attributes = {
+        "tags": kwargs.get("tags"),
+        "testonly": kwargs.get("testonly"),
+        "visibility": kwargs.get("visibility"),
+    }
+    if problems:
+        _isaac_sim_invalid_target(
+            name = name,
+            message = "isaac_sim_dataset %s: %s" % (name, "; ".join(problems)),
+            **group_attributes
+        )
+        return
+
+    chunk_names = ["%s_chunk_%d" % (name, index) for index in range(chunks)]
+    for index, chunk_name in enumerate(chunk_names):
+        isaac_sim_action(
+            name = chunk_name,
+            arguments = arguments + ["--seed", str(base_seed + index)],
+            frames = frames_per_chunk,
+            **kwargs
+        )
+    native.filegroup(
+        name = name,
+        srcs = [":" + chunk_name for chunk_name in chunk_names],
+        **group_attributes
+    )
+
 def isaac_sim_platform(
         name,
         gpu_model,
