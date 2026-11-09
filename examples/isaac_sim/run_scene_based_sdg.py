@@ -15,6 +15,7 @@ It does not see these three flags, and without them it runs unchanged.
 """
 
 import argparse
+import json
 import os
 import runpy
 import sys
@@ -47,20 +48,26 @@ def config_with_flags(options: argparse.Namespace) -> str:
     if options.frames is None and options.output_dir is None:
         return options.config
 
-    # Only runs that use these flags need yaml.
-    import yaml
+    # Parse the config as the sample does: yaml reads JSON numbers such as 1e-5
+    # as strings. Only runs that use these flags on a YAML config need yaml.
+    if options.config.endswith(".json"):
+        load, dump, suffix = json.load, json.dump, ".json"
+    else:
+        import yaml
+
+        load, dump, suffix = yaml.safe_load, yaml.safe_dump, ".yaml"
 
     with open(options.config) as f:
-        config = yaml.safe_load(f) or {}
+        config = load(f) or {}
     if options.frames is not None:
         config["num_frames"] = options.frames
     if options.output_dir is not None:
         config.setdefault("backend_params", {})["output_dir"] = options.output_dir
     # The sample ignores a config whose name does not end in .json or .yaml.
     # The file goes away with the container.
-    handle, path = tempfile.mkstemp(suffix=".yaml")
+    handle, path = tempfile.mkstemp(suffix=suffix)
     with os.fdopen(handle, "w") as f:
-        yaml.safe_dump(config, f)
+        dump(config, f)
     return path
 
 
