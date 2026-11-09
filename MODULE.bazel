@@ -6,21 +6,30 @@ module(
 
 bazel_dep(name = "rules_shell", version = "0.8.0")
 bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "rules_python", version = "1.6.3")
 
 # Test-only dependencies for //tests/isaac_sim/... (not seen by consumers).
 bazel_dep(name = "bazel_skylib", version = "1.8.1", dev_dependency = True)
-bazel_dep(name = "rules_python", version = "1.6.3", dev_dependency = True)
 
-python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency = True)
+# What //tools:usd_deps runs on. is_default only applies when this is the root module.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
 python.toolchain(
     is_default = True,
     python_version = "3.11",
 )
 
-pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_dependency = True)
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
 pip.parse(
+    hub_name = "rules_omniverse_usd_deps_pip",
+    python_version = "3.11",
+    requirements_lock = "//tools:usd_deps_requirements_lock.txt",
+)
+use_repo(pip, "rules_omniverse_usd_deps_pip")
+
+pip_dev = use_extension("@rules_python//python/extensions:pip.bzl", "pip", dev_dependency = True)
+pip_dev.parse(
     hub_name = "isaac_sim_test_pip",
     python_version = "3.11",
     requirements_lock = "//tests/isaac_sim:requirements_lock.txt",
 )
-use_repo(pip, "isaac_sim_test_pip")
+use_repo(pip_dev, "isaac_sim_test_pip")
