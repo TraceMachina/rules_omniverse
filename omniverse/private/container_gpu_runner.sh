@@ -298,7 +298,12 @@ kill_container() {
   done
   [[ -n "$cid" ]] || cid="$(cat "$cidfile" 2>/dev/null || true)"
   if [[ -n "$cid" ]]; then
-    "$runtime" kill "$cid" >/dev/null || echo "could not kill container $cid" >&2
+    # Docker writes the ID before starting the container. Cancellation can
+    # reach this point while it is still only created; kill cannot stop that
+    # state, so remove that same container rather than leaving it behind.
+    if ! "$runtime" kill "$cid" >/dev/null 2>&1; then
+      "$runtime" rm -f "$cid" >/dev/null || echo "could not kill or remove container $cid" >&2
+    fi
   fi
 }
 
