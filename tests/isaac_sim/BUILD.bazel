@@ -84,3 +84,14 @@ py_test(
     },
     deps = [":launcher_testing"],
 )
+
+# The example wrapper's --seed, --frames and --output_dir, against a stub of
+# NVIDIA's sample that reads its config the same way. isaac_sim_dataset itself
+# is tested by e2e/dataset/run.py, which starts Bazel.
+py_test(
+    name = "example_wrapper_flags_test",
+    srcs = ["example_wrapper_flags_test.py"],
+    data = ["//examples/isaac_sim:run_scene_based_sdg.py"],
+    env = {"EXAMPLE_WRAPPER": "$(rootpath //examples/isaac_sim:run_scene_based_sdg.py)"},
+    deps = [requirement("pyyaml")],
+)
