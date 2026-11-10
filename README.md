@@ -195,6 +195,28 @@ isaac_sim_action(
 - **Every local file the scene uses is declared** in `scene` or `assets`. Before the script starts, the launcher computes the scene's dependencies with OpenUSD and fails the action naming every undeclared file, so a missing texture cannot produce a stale cache hit.
 - **The output is the `<name>_out` directory.** `{output}` is replaced by its path, and `{input:NAME}` by the path of the declared input named `NAME`. The action fails when the script raises or exits non-zero, even though Kit exits 0, and when the output is empty.
 
+`isaac_sim_dataset` splits one dataset into chunks, one `isaac_sim_action` each, so that adding frames renders only the new chunks:
+
+```starlark
+load("@rules_omniverse//omniverse:defs.bzl", "isaac_sim_dataset")
+
+isaac_sim_dataset(
+    name = "dataset",
+    chunks = 3,
+    frames_per_chunk = 100,
+    base_seed = 42,
+    image = "nvcr.io/nvidia/isaac-sim:6.2.0.1@sha256:...",
+    script = "generate.py",
+    arguments = ["--config", "{input:config.yaml}", "--output_dir", "{output}"],
+    data = ["config.yaml"],
+    gpu_model = "L40S",
+)
+```
+
+This declares `dataset_chunk_0` to `dataset_chunk_2` and `dataset`, which builds them all. Chunk `i` runs the script with `--seed <base_seed + i>` and `--frames <frames_per_chunk>`, so the script must accept both. Raising `chunks` leaves the existing chunks' cache entries valid; changing `frames_per_chunk` or `base_seed` changes every chunk. Invalid settings fail when `dataset` is built, and the package still loads.
+
+The dataset's size is `chunks` × `frames_per_chunk`, 300 frames here. To reach a fixed total, choose the chunk size and set `chunks` to match. Chunks are independent samples, each starting the scene fresh with its own seed, so a continuous simulation, where each frame follows from the last, belongs in one `isaac_sim_action`. The macro declares new renders; it does not split or import the output of an earlier run.
+
 See [`examples/isaac_sim`](examples/isaac_sim/README.md) for prerequisites, worker setup, running NVIDIA's `scene_based_sdg` sample, troubleshooting and limits.
 
 ## Rules reference
@@ -227,6 +249,7 @@ Packaging rules accept a configurable `packager` executable. Their default uses 
 | `omni_gpu_platform` | Declare GPU constraints and scheduler properties |
 | `omni_worker_script` | Upload a worker-side script without embedding the Bazel client's interpreter |
 | `isaac_sim_action` | Run a headless Isaac Sim script in a pinned image and capture its output directory |
+| `isaac_sim_dataset` | Split one Isaac Sim dataset into seeded chunks, each cached on its own |
 | `isaac_sim_platform` | Declare a GPU platform for Isaac Sim containers with driver-specific cache identity |
 
 USD arguments support `{src}`, `{out}`, and `{report}` placeholders. Additional files such as referenced layers, textures, profiles, or configuration must be declared through `data` so they participate in the action key.

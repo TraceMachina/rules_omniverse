@@ -1,6 +1,9 @@
-load("//omniverse:defs.bzl", "isaac_sim_action", "isaac_sim_platform")
+load("//omniverse:defs.bzl", "isaac_sim_action", "isaac_sim_dataset", "isaac_sim_platform")
 
 package(default_visibility = ["//visibility:public"])
+
+# Must match isaac_sim.pin.
+_IMAGE = "nvcr.io/nvidia/isaac-sim:6.2.0.1@sha256:72d85e83fe76ac0dbe3cf6e77523c9ee9664db02c2e0fc92be35ee3c16cf3402"
 
 isaac_sim_platform(
     name = "isaac_sim_l40s_linux_x86_64",
@@ -32,8 +35,28 @@ isaac_sim_action(
     ],
     data = [":scene_based_sdg_config"],
     gpu_model = "L40S",
-    # Must match isaac_sim.pin.
-    image = "nvcr.io/nvidia/isaac-sim:6.2.0.1@sha256:72d85e83fe76ac0dbe3cf6e77523c9ee9664db02c2e0fc92be35ee3c16cf3402",
+    image = _IMAGE,
+    script = "run_scene_based_sdg.py",
+    tags = ["manual"],
+)
+
+# The same sample as one dataset of three chunks, each with its own seed and
+# output folder. The wrapper applies the chunk's flags to the shared config.
+isaac_sim_dataset(
+    name = "scene_based_sdg_dataset",
+    arguments = [
+        "--config",
+        "{input:scene_based_sdg.yaml}",
+        "--output_dir",
+        "{output}",
+        "--headless",
+    ],
+    base_seed = 42,
+    chunks = 3,
+    data = [":scene_based_sdg_config"],
+    frames_per_chunk = 10,
+    gpu_model = "L40S",
+    image = _IMAGE,
     script = "run_scene_based_sdg.py",
     tags = ["manual"],
 )

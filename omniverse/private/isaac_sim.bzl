@@ -63,11 +63,23 @@ def _expand_placeholders(attribute, values, inputs, output):
         expanded.append(result.replace("{output}", output.path))
     return expanded
 
+def _seed_argument_problems(arguments):
+    return [
+        "do not set --seed in arguments; base_seed sets it (got %r)" % (argument,)
+        for argument in arguments
+        if argument == "--seed" or argument.startswith("--seed=")
+    ]
+
 def _isaac_sim_action_impl(ctx):
     if "@sha256:" not in ctx.attr.image:
         fail("isaac_sim_action image must be pinned by digest (contain @sha256:), got %r" % ctx.attr.image)
     if ctx.attr.frames_set and ctx.attr.frames < 1:
         fail("isaac_sim_action frames must be a positive integer, got %d" % ctx.attr.frames)
+    if ctx.attr.seed_set:
+        # A select() in arguments only has its value here, not in the macro.
+        problems = _seed_argument_problems(ctx.attr.arguments)
+        if problems:
+            fail("isaac_sim_dataset %s: %s" % (ctx.label.name, "; ".join(problems)))
 
     output = ctx.actions.declare_directory(ctx.label.name + "_out")
     placeholder_inputs = [ctx.file.script] + ctx.files.scene + ctx.files.assets + ctx.files.data
@@ -82,6 +94,8 @@ def _isaac_sim_action_impl(ctx):
     # Absolute, because the container's working directory is the execution root, not /isaac-sim.
     arguments.append(EXEC_ROOT_TOKEN + "/" + ctx.file.script.path)
     arguments.extend(_expand_placeholders("arguments", ctx.attr.arguments, placeholder_inputs, output))
+    if ctx.attr.seed_set:
+        arguments.extend(["--seed", str(ctx.attr.seed)])
     if ctx.attr.frames_set:
         arguments.extend(["--frames", str(ctx.attr.frames)])
 
@@ -185,6 +199,12 @@ _isaac_sim_action = rule(
             mandatory = True,
             doc = "Isaac Sim Python script run with the image's python.sh.",
         ),
+        "seed": attr.int(
+            doc = "Seed appended to the script arguments as --seed when seed_set is true. Set by isaac_sim_dataset.",
+        ),
+        "seed_set": attr.bool(
+            doc = "Whether seed was given; arguments may then not contain --seed.",
+        ),
         "shm_size": attr.string(
             default = "64g",
             doc = "Container shared-memory allocation.",
@@ -256,15 +276,93 @@ def isaac_sim_action(
     )
 
 def _isaac_sim_invalid_target_impl(ctx):
-    fail(ctx.attr.message)
+    fail("; ".join([ctx.attr.message] + _seed_argument_problems(ctx.attr.arguments)))
 
 _isaac_sim_invalid_target = rule(
     implementation = _isaac_sim_invalid_target_impl,
     attrs = {
+        "arguments": attr.string_list(
+            doc = "Dataset arguments only known at analysis, because they contain a select(); checked for --seed.",
+        ),
         "message": attr.string(mandatory = True),
     },
     doc = "Fails analysis with message; stands in for a target declared with invalid arguments.",
 )
+
+def _is_integer_of_at_least(value, minimum):
+    return type(value) == "int" and value >= minimum
+
+def isaac_sim_dataset(
+        name,
+        chunks,
+        frames_per_chunk,
+        base_seed,
+        arguments = [],
+        frames = None,
+        **kwargs):
+    """Splits one dataset into isaac_sim_action chunks, each cached on its own.
+
+    Declares <name>_chunk_0 to <name>_chunk_<chunks - 1>, and <name>, a filegroup of
+    all of them. Chunk i runs the script with --seed <base_seed + i> and
+    --frames <frames_per_chunk>, so the script must accept both. No action depends on
+    chunks: raising it leaves the existing chunks' cache entries valid.
+
+    Invalid settings fail when <name> is built, not when the package loads.
+
+    Args:
+      name: Name of the filegroup, and prefix of the chunk targets.
+      chunks: Number of chunks, at least 1.
+      frames_per_chunk: Frames each chunk renders, at least 1.
+      base_seed: Seed of the first chunk, zero or more.
+      arguments: Script arguments, as for isaac_sim_action, without --seed. Use {output} to
+        give each chunk its own output directory.
+      frames: Not allowed; frames_per_chunk sets it.
+      **kwargs: Remaining isaac_sim_action attributes, such as image, script, data or tags.
+        tags, testonly and visibility also apply to the filegroup.
+    """
+    arguments = arguments or []
+    problems = []
+    if not _is_integer_of_at_least(chunks, 1):
+        problems.append("chunks must be a positive integer, got %r" % (chunks,))
+    if not _is_integer_of_at_least(frames_per_chunk, 1):
+        problems.append("frames_per_chunk must be a positive integer, got %r" % (frames_per_chunk,))
+    if not _is_integer_of_at_least(base_seed, 0):
+        problems.append("base_seed must be zero or a positive integer, got %r" % (base_seed,))
+    if frames != None:
+        problems.append("do not set frames; frames_per_chunk sets it (got frames = %r)" % (frames,))
+    arguments_are_literal = type(arguments) == "list"
+    if arguments_are_literal:
+        problems.extend(_seed_argument_problems(arguments))
+
+    group_attributes = {
+        "tags": kwargs.get("tags"),
+        "testonly": kwargs.get("testonly"),
+        "visibility": kwargs.get("visibility"),
+    }
+    if problems:
+        _isaac_sim_invalid_target(
+            name = name,
+            arguments = [] if arguments_are_literal else arguments,
+            message = "isaac_sim_dataset %s: %s" % (name, "; ".join(problems)),
+            **group_attributes
+        )
+        return
+
+    chunk_names = ["%s_chunk_%d" % (name, index) for index in range(chunks)]
+    for index, chunk_name in enumerate(chunk_names):
+        isaac_sim_action(
+            name = chunk_name,
+            arguments = arguments,
+            frames = frames_per_chunk,
+            seed = base_seed + index,
+            seed_set = True,
+            **kwargs
+        )
+    native.filegroup(
+        name = name,
+        srcs = [":" + chunk_name for chunk_name in chunk_names],
+        **group_attributes
+    )
 
 def isaac_sim_platform(
         name,
