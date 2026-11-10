@@ -215,6 +215,8 @@ isaac_sim_dataset(
 
 This declares `dataset_chunk_0` to `dataset_chunk_2` and `dataset`, which builds them all. Chunk `i` runs the script with `--seed <base_seed + i>` and `--frames <frames_per_chunk>`, so the script must accept both. Raising `chunks` leaves the existing chunks' cache entries valid; changing `frames_per_chunk` or `base_seed` changes every chunk. Invalid settings fail when `dataset` is built, and the package still loads.
 
+The dataset's size is `chunks` × `frames_per_chunk`, 300 frames here. To reach a fixed total, choose the chunk size and set `chunks` to match. Chunks are independent samples, each starting the scene fresh with its own seed, so a continuous simulation, where each frame follows from the last, belongs in one `isaac_sim_action`. The macro declares new renders; it does not split or import the output of an earlier run.
+
 See [`examples/isaac_sim`](examples/isaac_sim/README.md) for prerequisites, worker setup, running NVIDIA's `scene_based_sdg` sample, troubleshooting and limits.
 
 ## Rules reference
