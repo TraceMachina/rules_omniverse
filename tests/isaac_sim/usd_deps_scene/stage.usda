@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    defaultPrim = "World"
+    subLayers = [
+        @./props/chair.usda@
+    ]
+)
+
+def Xform "World"
+{
+}

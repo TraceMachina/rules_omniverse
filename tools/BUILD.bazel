@@ -1,7 +1,29 @@
+load("@rules_python//python:py_binary.bzl", "py_binary")
 load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("//omniverse:defs.bzl", "omni_worker_script")
+load("//tools:script_bootstrap.bzl", "script_bootstrap_binary")
 
 package(default_visibility = ["//visibility:public"])
+
+# Writes a scene's dependency list (docs/usd_deps.md). The launcher is a source
+# so the tool imports its resolution instead of keeping a copy.
+py_binary(
+    name = "usd_deps_bin",
+    srcs = [
+        "usd_deps.py",
+        "//omniverse/private:isaac_sim_launcher.py",
+    ],
+    imports = ["../omniverse/private"],
+    main = "usd_deps.py",
+    python_version = "3.11",
+    visibility = ["//visibility:private"],
+    deps = ["@rules_omniverse_usd_deps_pip//usd_core"],
+)
+
+script_bootstrap_binary(
+    name = "usd_deps",
+    binary = ":usd_deps_bin",
+)
 
 sh_binary(
     name = "assert_manifest",

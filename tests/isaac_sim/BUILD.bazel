@@ -84,3 +84,58 @@ py_test(
     },
     deps = [":launcher_testing"],
 )
+
+# tools/usd_deps.py, the USD dependency generator (docs/usd_deps.md). Each test
+# runs the //tools:usd_deps binary and finds the tool through it.
+_USD_DEPS = "//tools:usd_deps"
+
+_USD_DEPS_ENV = {"USD_DEPS": "$(rootpath %s)" % _USD_DEPS}
+
+# What it lists, where it writes and when it fails, on the interpreter and
+# usd-core the binary brings. This test's usd-core is only for its precondition.
+# The launcher is left out of data so the tool's own runfiles must be enough.
+py_test(
+    name = "usd_deps_test",
+    srcs = ["usd_deps_test.py"],
+    data = [_USD_DEPS],
+    env = _USD_DEPS_ENV,
+    deps = [requirement("usd-core")],
+)
+
+# The tool and the launcher read the same stubbed USD answer the same way. No
+# usd-core here, so the launcher's only pxr is the stub. The tool's own usd-core
+# is in its runfiles, behind the stub on PYTHONPATH.
+py_test(
+    name = "usd_deps_resolution_test",
+    srcs = ["usd_deps_resolution_test.py"],
+    data = [
+        _LAUNCHER,
+        _USD_DEPS,
+    ],
+    env = _LAUNCHER_ENV | _USD_DEPS_ENV,
+    deps = [":launcher_testing"],
+)
+
+# A generated list, loaded by a real isaac_sim_action, passes the launcher's
+# check with the stub Isaac Sim. usd_deps_scene/ holds the package.
+py_test(
+    name = "usd_deps_action_test",
+    srcs = ["usd_deps_action_test.py"],
+    data = [
+        _LAUNCHER,
+        _USD_DEPS,
+        "//tests/isaac_sim/usd_deps_scene:generate_argv",
+        "//tests/isaac_sim/usd_deps_scene:package_files",
+        "//tests/isaac_sim/usd_deps_scene:stage.usda",
+    ] + glob(["fake_isaacsim/**/*.py"]),
+    env = _LAUNCHER_ENV | _USD_DEPS_ENV | {
+        "FAKE_ISAACSIM": "$(rootpath fake_isaacsim/image/isaacsim/__init__.py)",
+        "FAKE_KIT": "$(rootpath fake_isaacsim/kit/fake_kit.py)",
+        "USD_DEPS_ACTION_ARGV": "$(rootpath //tests/isaac_sim/usd_deps_scene:generate_argv)",
+        "USD_DEPS_SCENE": "$(rootpath //tests/isaac_sim/usd_deps_scene:stage.usda)",
+    },
+    deps = [
+        ":launcher_testing",
+        requirement("usd-core"),
+    ],
+)
