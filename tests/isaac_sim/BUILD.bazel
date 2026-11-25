@@ -21,6 +21,7 @@ load("@rules_shell//shell:sh_test.bzl", "sh_test")
 ) for name in [
     "cache_mounts",  # worker cache mounts
     "malformed_mounts",  # a malformed cache mount entry fails
+    "gpu_devices",  # worker GPU selection with RULES_OMNIVERSE_GPU_DEVICES
     "empty_lists",  # no --env or --forward-env, on bash 3.2
     "writable_output",  # output opened for the container user, ownership given back
     "nonempty_output",  # an empty output fails even when the container exits 0

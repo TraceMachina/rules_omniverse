@@ -62,9 +62,11 @@ def _action_test_impl(ctx):
     for path in [_LAUNCHER] + ctx.attr.expected_inputs:
         asserts.true(env, path in input_paths, "missing action input %s" % path)
 
-    # The cache-mount variable belongs to the worker, never to the action.
+    # The cache mounts and GPU selection belong to the worker, never to the
+    # action, so they stay out of its key.
     for value in argv + action.env.keys() + action.env.values():
-        asserts.false(env, "OMNI_CONTAINER_CACHE_MOUNTS" in value, "action sets OMNI_CONTAINER_CACHE_MOUNTS: %s" % value)
+        for name in ["OMNI_CONTAINER_CACHE_MOUNTS", "RULES_OMNIVERSE_GPU_DEVICES"]:
+            asserts.false(env, name in value, "action sets %s: %s" % (name, value))
 
     return analysistest.end(env)
 
