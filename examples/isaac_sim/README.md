@@ -13,7 +13,7 @@ props into `bazel-bin/examples/isaac_sim/scene_based_sdg_out/`.
 ## Prerequisites
 
 - A Linux x86_64 worker with an NVIDIA GPU that has RT cores, for example an
-  L40S. A100 and H100 are not supported.
+  L4, L40S or A10G. A100, H100 and H200 are not supported.
 - NVIDIA driver 595.58.03 or newer.
 - Docker with the NVIDIA container toolkit, usable by the user that runs
   actions: `docker run --rm --gpus 1 ubuntu nvidia-smi` must work.
@@ -86,6 +86,12 @@ schedulers: [
 
 For stores, servers and transport, see [`examples/nativelink/gpu`](../nativelink/gpu/README.md)
 and the [NativeLink documentation](https://docs.nativelink.com/).
+
+On a host with several GPUs, run one worker per GPU with its own
+`RULES_OMNIVERSE_GPU_DEVICES`, added to `additional_environment` like the cache
+mounts; otherwise every action runs on GPU 0. A small headless action uses
+about 3.6 GB of GPU memory, so several workers can share a GPU. See
+[One worker per GPU](../nativelink/gpu/README.md#one-worker-per-gpu).
 
 ## Run
 

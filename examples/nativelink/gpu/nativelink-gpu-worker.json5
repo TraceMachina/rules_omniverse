@@ -1,0 +1,113 @@
+// One NativeLink worker that owns the GPU(s) named in RULES_OMNIVERSE_GPU_DEVICES.
+// Start one process with this file per GPU, or several per GPU for small
+// workloads, next to a NativeLink process that serves the CAS, action cache and
+// scheduler (nativelink-h200.json5 with its `workers` list empty). See README.md.
+//
+// Each process needs, in its own environment:
+//   RULES_OMNIVERSE_GPU_DEVICES  GPU index or UUID, e.g. 3; passed to each action
+//                                and used by the container runner as --gpus device=3
+//   NL_WORKER_SLOT               distinguishes workers that share a GPU (default 0)
+//   NL_GPU_MODEL                 e.g. L40S, matched exactly against gpu_model
+//   NL_WORKER_RUNTIME            e.g. nvidia-driver-595.99.02, matched against worker_runtime
+//   CUDA_VISIBLE_DEVICES         the same GPU, for host-tool actions
+// Loading fails if RULES_OMNIVERSE_GPU_DEVICES, NL_GPU_MODEL or
+// NL_WORKER_RUNTIME is unset; an empty RULES_OMNIVERSE_GPU_DEVICES gives back
+// Docker's own choice, GPU 0.
+{
+  stores: [
+    {
+      name: "CAS_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [{ address: "grpc://${NL_CAS_ADDR:-127.0.0.1:50051}" }],
+        store_type: "cas",
+      },
+    },
+    {
+      name: "AC_STORE",
+      grpc: {
+        instance_name: "",
+        endpoints: [{ address: "grpc://${NL_CAS_ADDR:-127.0.0.1:50051}" }],
+        store_type: "ac",
+      },
+    },
+    {
+      name: "WORKER_FAST_SLOW_STORE",
+      fast_slow: {
+        // Each worker process has its own directories; two processes must
+        // never share a filesystem store or a work directory.
+        fast: {
+          filesystem: {
+            content_path: "${NL_NVME_ROOT:-/mnt/nvme}/rules-omniverse/workers/gpu${RULES_OMNIVERSE_GPU_DEVICES}-${NL_WORKER_SLOT:-0}/cas/content",
+            temp_path: "${NL_NVME_ROOT:-/mnt/nvme}/rules-omniverse/workers/gpu${RULES_OMNIVERSE_GPU_DEVICES}-${NL_WORKER_SLOT:-0}/cas/tmp",
+            eviction_policy: {
+              max_bytes: 100000000000,
+            },
+          },
+        },
+        slow: {
+          ref_store: {
+            name: "CAS_STORE",
+          },
+        },
+      },
+    },
+  ],
+  workers: [
+    {
+      local: {
+        name: "gpu${RULES_OMNIVERSE_GPU_DEVICES}-${NL_WORKER_SLOT:-0}-",
+        worker_api_endpoint: {
+          uri: "grpc://${NL_WORKER_API_ADDR:-127.0.0.1:50061}",
+        },
+        max_action_timeout_s: "${NL_MAX_ACTION_TIMEOUT:-2h}",
+        max_upload_timeout_s: "${NL_MAX_UPLOAD_TIMEOUT:-30m}",
+        cas_fast_slow_store: "WORKER_FAST_SLOW_STORE",
+        upload_action_result: {
+          ac_store: "AC_STORE",
+        },
+        work_directory: "${NL_NVME_ROOT:-/mnt/nvme}/rules-omniverse/workers/gpu${RULES_OMNIVERSE_GPU_DEVICES}-${NL_WORKER_SLOT:-0}/work",
+        // The worker passes these to each action without putting them in the
+        // action key, so a result from one GPU is a cache hit on another.
+        additional_environment: {
+          PATH: "from_environment",
+          OMNI_CONTAINER_CACHE_MOUNTS: "from_environment",
+          RULES_OMNIVERSE_GPU_DEVICES: "from_environment",
+          // For host-tool actions (omni_gpu_action), which do not use the
+          // container runner. Set it to the same GPU: an unset variable
+          // reaches the action empty, and CUDA then sees no GPU at all.
+          CUDA_VISIBLE_DEVICES: "from_environment",
+        },
+        platform_properties: {
+          cpu_count: {
+            query_cmd: "nproc",
+          },
+          // One GPU per worker. gpu_count is matched as a minimum and reserved
+          // while an action runs, so this worker runs one GPU action at a time.
+          gpu_count: {
+            values: ["1"],
+          },
+          gpu_model: {
+            values: ["${NL_GPU_MODEL}"],
+          },
+          OSFamily: {
+            values: ["linux"],
+          },
+          worker_runtime: {
+            values: ["${NL_WORKER_RUNTIME}"],
+          },
+          "container-runtime": {
+            values: ["docker"],
+          },
+          "container-image": {
+            values: [""],
+          },
+        },
+        // Trusted, single-tenant host only; see README.md.
+        use_namespaces: false,
+        use_mount_namespace: false,
+      },
+    },
+  ],
+  servers: [],
+}
