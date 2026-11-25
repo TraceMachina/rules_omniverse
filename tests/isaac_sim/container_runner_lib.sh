@@ -195,8 +195,9 @@ finish() {
 # start_runner [NAME=VALUE...] [FLAG...]: starts the runner in the background
 # from $work, with a fresh fake docker record, as
 #   runner --image $image --gpu-count 1 FLAG... -- ${container_args[@]}
-# with OMNI_CONTAINER_CACHE_MOUNTS unset and each NAME=VALUE in its
-# environment. Sets $runner_pid; the runner's stderr goes to $stderr_file.
+# with OMNI_CONTAINER_CACHE_MOUNTS and RULES_OMNIVERSE_GPU_DEVICES unset and
+# each NAME=VALUE in its environment. A later --gpu-count FLAG overrides the
+# 1. Sets $runner_pid; the runner's stderr goes to $stderr_file.
 start_runner() {
   local -a assignments=()
   while [[ $# -gt 0 && "$1" =~ ^[A-Z_][A-Z0-9_]*= ]]; do
@@ -207,7 +208,7 @@ start_runner() {
   mkdir -p "$state/calls" "$state/containers"
   (
     cd "$work"
-    exec env -u OMNI_CONTAINER_CACHE_MOUNTS PATH="$fake_bin:$PATH" \
+    exec env -u OMNI_CONTAINER_CACHE_MOUNTS -u RULES_OMNIVERSE_GPU_DEVICES PATH="$fake_bin:$PATH" \
       FAKE_DOCKER_STATE="$state" FAKE_OUTPUT="$out_abs" ${assignments[@]+"${assignments[@]}"} \
       bash "$runner" --image "$image" --gpu-count 1 ${1+"$@"} -- "${container_args[@]}"
   ) 2>"$stderr_file" &

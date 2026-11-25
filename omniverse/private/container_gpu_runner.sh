@@ -83,6 +83,43 @@ if [[ ! "$gpu_count" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
+# GPU selection. `--gpus N` lets the runtime choose N GPUs, which always
+# starts at device 0, so workers that share a host would all use GPU 0. A
+# worker that owns particular GPUs names them in RULES_OMNIVERSE_GPU_DEVICES:
+# comma-separated indices or GPU-/MIG- UUIDs, as many as the action requests.
+# The worker injects the value, so it is not part of the action key.
+gpus="$gpu_count"
+gpu_devices="${RULES_OMNIVERSE_GPU_DEVICES:-}"
+if [[ -n "$gpu_devices" ]]; then
+  device_count=0
+  seen=","
+  remaining="$gpu_devices,"
+  while [[ -n "$remaining" ]]; do
+    entry="${remaining%%,*}"
+    remaining="${remaining#*,}"
+    if [[ ! "$entry" =~ ^([0-9]+|(GPU|MIG)-[A-Za-z0-9/-]+)$ ]]; then
+      echo "malformed RULES_OMNIVERSE_GPU_DEVICES entry '$entry' in '$gpu_devices'; expected comma-separated GPU indices or UUIDs, such as 0 or 0,1" >&2
+      exit 2
+    fi
+    if [[ "$seen" == *",$entry,"* ]]; then
+      echo "RULES_OMNIVERSE_GPU_DEVICES '$gpu_devices' lists GPU $entry twice" >&2
+      exit 2
+    fi
+    seen="$seen$entry,"
+    device_count=$((device_count + 1))
+  done
+  if ((device_count != gpu_count)); then
+    echo "RULES_OMNIVERSE_GPU_DEVICES '$gpu_devices' lists $device_count GPU(s), but the action requests gpu_count $gpu_count; give this worker as many GPUs as the actions it runs request" >&2
+    exit 2
+  fi
+  # Docker reads the value as CSV, so a list is quoted to stay one field.
+  if ((device_count == 1)); then
+    gpus="device=$gpu_devices"
+  else
+    gpus="\"device=$gpu_devices\""
+  fi
+fi
+
 declare -a cache_volumes=()
 cache_mounts="${OMNI_CONTAINER_CACHE_MOUNTS:-}"
 if [[ -n "$cache_mounts" ]]; then
@@ -226,7 +263,7 @@ done
 
 declare -a command=(
   "$runtime" run --rm
-  --gpus "$gpu_count"
+  --gpus "$gpus"
   --network "$network"
   --shm-size "$shm_size"
   --volume "$PWD:$PWD"

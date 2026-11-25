@@ -67,5 +67,6 @@ exports_files([
     "README.md",
     "h200.bazelrc.example",
     "h200_preflight.py",
+    "nativelink-gpu-worker.json5",
     "nativelink-h200.json5",
 ])

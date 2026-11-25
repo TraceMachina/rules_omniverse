@@ -2,6 +2,19 @@
 
 All notable changes to `rules_omniverse` are documented here.
 
+## [Unreleased]
+
+### Added
+
+- Container GPU actions run on the GPUs named by the worker in
+  `RULES_OMNIVERSE_GPU_DEVICES` (for example `3` or `0,1`), passed to Docker as
+  `--gpus device=...`, so one NativeLink worker per GPU no longer puts every
+  action on GPU 0. The worker supplies the value, so it is not part of the
+  action key. The list must name as many GPUs as the action's `gpu_count`.
+  Unset, actions still get `--gpus <gpu_count>`.
+- `examples/nativelink/gpu/nativelink-gpu-worker.json5` and a guide to running
+  one worker, or several, per GPU on one host.
+
 ## [0.3.0] - 2026-07-16
 
 ### Added

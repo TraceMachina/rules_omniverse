@@ -263,6 +263,10 @@ New to remote execution? Start here:
 
 See [`examples/nativelink/gpu`](examples/nativelink/gpu/README.md) for worker configuration, platforms, and real-versus-fake hardware preflight, including an H200 `.bazelrc` example and a hardware preflight script.
 
+### Several GPUs on one host
+
+By default a container action gets `--gpus <gpu_count>`, and Docker takes GPU 0 first, so every worker on a multi-GPU host would run on GPU 0. Run one NativeLink worker per GPU instead, each started with its own `RULES_OMNIVERSE_GPU_DEVICES` (a GPU index or UUID, such as `3`, or a list such as `0,1`) and forwarded with `additional_environment: { RULES_OMNIVERSE_GPU_DEVICES: "from_environment" }`. The container runner then passes `--gpus device=3`, or `--gpus '"device=0,1"'` for a list. The list must name exactly as many GPUs as the action's `gpu_count`, or the action fails. The variable comes from the worker, not the action, so it is not part of the action key and a result built on one GPU is a cache hit on another. Unset or empty, nothing changes. Several workers may share one GPU when actions are small: a headless Isaac Sim action uses about 3.6 GB. Host-tool actions (`omni_gpu_action`) do not use the runner; give their workers `CUDA_VISIBLE_DEVICES` the same way. See [One worker per GPU](examples/nativelink/gpu/README.md#one-worker-per-gpu) for a worker configuration and launch loop.
+
 ## Testing
 
 The `fake_gpu` fixtures under `//tests` and `//e2e/bzlmod` verify Starlark analysis, constraints, arguments, declared artifacts, and external-module use without reserving a GPU. They do not claim CUDA or SDK execution.
